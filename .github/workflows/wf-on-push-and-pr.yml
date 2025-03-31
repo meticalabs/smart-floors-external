@@ -1,0 +1,46 @@
+name: CI Build
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - '**/.gitignore'
+      - '.github/**'
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: CI build - all
+        uses: meticalabs/gh_workflows/.github/actions/poetry-conda-install@main
+        with:
+          github_token: ${{ secrets.CI_GITHUB_TOKEN }}
+          python_version: '3.10'
+          run_make_all: true
+
+      - name: Code Coverage Summary Report
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        if: github.event_name == 'pull_request'
+        with:
+          filename: ./coverage.xml
+          badge: true
+          format: markdown
+          hide_branch_rate: false
+          hide_complexity: true
+          indicators: true
+          output: both
+
+      - name: Add Coverage PR Comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request'
+        with:
+          recreate: true
+          path: ./code-coverage-results.md
