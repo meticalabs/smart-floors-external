@@ -176,3 +176,7 @@ cython_debug/
 poetry.lock
 /tests/coverage/
 .DS_Store
+/stderr
+/stdout
+/py-env.zip
+/env.yml
