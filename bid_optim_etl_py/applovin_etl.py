@@ -149,7 +149,7 @@ class Events:
         self.logger.info(f"Saving DataFrame to Iceberg table: {self.training_data_db_table_name}")
         self.iceberg_io.write(spark_df=df, table_config=self.training_data_table_config,
                               partition_by=[Schema.CUSTOMER_ID, Schema.APP_ID, Schema.MODEL_ID], create_database=True,
-                              overwrite_partitions=True, repartition=True)
+                              overwrite_partitions=True)
 
     def perform_maintenance(self):
         older_than_7_days = datetime.datetime.combine(self.date, datetime.datetime.min.time()) - datetime.timedelta(

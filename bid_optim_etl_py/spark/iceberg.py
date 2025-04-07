@@ -69,15 +69,6 @@ class IcebergIO:
         log4jLogger = self.spark.sparkContext._jvm.org.apache.log4j
         self._log = log4jLogger.LogManager.getLogger(__name__)
 
-    def repartition_table(self, data_frame: DataFrame, partitions: [str]) -> DataFrame:
-        if not partitions:
-            return data_frame
-        num_partitions = partitions[0]
-        if len(partitions) == 1:
-            return data_frame.repartition(numPartitions=num_partitions)
-
-        return data_frame.repartition(num_partitions, *partitions[1:])
-
     def configure_spark_writer(self, df: DataFrame, db_table_name: str,
                                options: dict[str, str] = None) -> DataFrameWriterV2:
         df_writer = (
@@ -120,12 +111,10 @@ class IcebergIO:
             self._log.info(f"Table {db_table_name} already exists")
 
     def write(self, spark_df: DataFrame, table_config: TableConfig, partition_by: [str] = None,
-              repartition: bool = False, create_database: bool = False, overwrite_partitions: bool = True,
+              create_database: bool = False, overwrite_partitions: bool = True,
               write_options: dict = None):
         if create_database:
             self.create_glue_database_if_not_exists(name=table_config.database_name, region_name=self.region_name, )
-        if repartition:
-            spark_df = self.repartition_table(spark_df, partition_by)
 
         sink_table_name_with_catalog = table_config.db_table_name(self.iceberg_catalog)
         self.create_iceberg_table_if_not_exists(df=spark_df,
