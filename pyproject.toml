@@ -45,7 +45,7 @@ omit = [".*", "*/site-packages/*", "tests/*"]
 
 [tool.coverage.paths]
 source = [
-    "/"
+    "bid_optim_etl_py/"
 ]
 
 [tool.coverage.report]

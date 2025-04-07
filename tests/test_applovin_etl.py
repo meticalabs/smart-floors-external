@@ -107,8 +107,10 @@ class TestApplovinETL:
         result_df.show(truncate=False)
 
         pd.testing.assert_frame_equal(
-            iceberg_df.drop(Schema.LAST_UPDATE_TIME).toPandas().sort_values(by=[Schema.REQUEST_ID, Schema.USER_ID]),
-            result_df.drop(Schema.LAST_UPDATE_TIME).toPandas().sort_values(by=[Schema.REQUEST_ID, Schema.USER_ID]),
+            iceberg_df.drop(Schema.LAST_UPDATE_TIME).toPandas().sort_values(
+                by=[Schema.REQUEST_ID, Schema.USER_ID]).reset_index(drop=True),
+            result_df.drop(Schema.LAST_UPDATE_TIME).toPandas().sort_values(
+                by=[Schema.REQUEST_ID, Schema.USER_ID]).reset_index(drop=True),
             check_like=True,
             check_exact=False,
             check_index_type=False,
