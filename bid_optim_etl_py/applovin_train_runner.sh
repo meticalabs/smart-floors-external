@@ -6,8 +6,9 @@
 PYTHON_RUNNER=$1
 CUSTOMER_ID=$2
 APP_ID=$3
-EVENTS_BASE_PATH=$4
-ENV_TAR_FILE=$5
+MODEL_ID=$4
+ICEBERG_TRAIN_TABLE=$5
+ENV_TAR_FILE=$6
 
 # -----------------------------------------------------------------------------
 # Activate the conda environment
@@ -29,5 +30,5 @@ pip install -U /tmp/env.tar.gz
 # -----------------------------------------------------------------------------
 echo "Running the Ray job"
 aws s3 cp "${PYTHON_RUNNER}" /tmp/runner.py
-python3 /tmp/runner.py --customer_id "${CUSTOMER_ID}" --app_id "${APP_ID}" --app_reqs_s3_tar "s3://com.metica.dev.dplat.artifacts/bid_optim_etl_py-0.1.0-py3-none-any.whl" --events_base_path_s3 "${EVENTS_BASE_PATH}"
+python3 /tmp/runner.py --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}"
 
