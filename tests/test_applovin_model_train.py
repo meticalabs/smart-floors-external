@@ -6,7 +6,7 @@ import pytest
 import ray
 from ray.train.xgboost import RayTrainReportCallback
 
-from bid_optim_etl_py.applovin_train_runner import ModelTrainer  # Replace with the actual import path
+from bid_optim_etl_py.applovin_train_runner import ModelTrainer, ValueReplacer
 
 
 @pytest.fixture(scope="module")
@@ -55,6 +55,26 @@ class TestImpressionCount:
             "device": ["iPhone"]
         }
         assert result.default_value == "default"
+
+    @pytest.mark.parametrize("value_replacer, input_data, expected_output", [
+        (ValueReplacer(valid_values={"category": ["A", "B"]},
+                       default_value="other"), {"category": "A"}, {"category": "A"}),
+        (ValueReplacer(valid_values={"category": ["A"]},
+                       default_value="other"), {"category": "B"}, {"category": "other"}),
+        (ValueReplacer(valid_values={"category": ["A", "B"]},
+                       default_value="other"), {"category": None}, {"category": None}),
+        (ValueReplacer(valid_values={"category": ["A", "B"]},
+                       default_value="other"), {"category": "C"}, {"category": "other"}),
+        (ValueReplacer(valid_values={"category": ["A", "B"], "device": ["iPhone"]},
+                       default_value="other"), {"category": "A", "device": "iPhone"},
+         {"category": "A", "device": "iPhone"}),
+        (ValueReplacer(valid_values={"category": ["A", "B"], "device": ["iPhone"]},
+                       default_value="other"), {"category": "C", "device": "iPhone"},
+         {"category": "other", "device": "iPhone"}),
+    ])
+    def test_value_replacer_transform(self, value_replacer, input_data, expected_output):
+        output = value_replacer.transform_series(pd.Series(input_data))
+        assert output.to_dict() == expected_output
 
     def test_map_batches(self, ray_cluster, sample_dataset):
         trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
