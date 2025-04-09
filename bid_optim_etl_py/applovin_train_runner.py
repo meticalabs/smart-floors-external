@@ -1,6 +1,6 @@
 import datetime
 from dataclasses import dataclass
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -336,7 +336,7 @@ class ModelTrainer:
         return num_workers
 
     def run(self, assignments_with_ad_revenue: ray.data.Dataset, target_column: str,
-            *, cross_validation: bool = False, num_workers: int = 4) -> Tuple[Result, ValueReplacer, Features]:
+            *, use_validation_set: bool = False, num_workers: int = 4) -> Tuple[Result, ValueReplacer, Features]:
         """
         Executes the process of training an XGBoost model on the given dataset with
         options for cross-validation and preprocessing. The function handles data
@@ -347,9 +347,9 @@ class ModelTrainer:
             assignment data combined with associated ad revenue information.
         :param target_column: Specifies the column in the dataset that serves as the
             target variable for prediction.
-        :param cross_validation: A boolean flag that indicates whether cross-validation
-            should be applied during dataset preparation. Defaults to False. If True,
-            the dataset will be split into training and validation subsets.
+        :param use_validation_set: A boolean flag that indicates whether to use a
+            validation set for model evaluation during training. If set to True, the
+            dataset will be split into training and validation sets.
 
         :return: A tuple containing the following:
             - `Result`: The result object from the XGBoost training process, which
@@ -374,7 +374,7 @@ class ModelTrainer:
         transformed_ds = assignments_with_ad_revenue.map_batches(value_replacer.transform, batch_format="pandas")
 
         # Split the dataset
-        train_dataset, valid_dataset, _ = self.prepare_data(transformed_ds, target_column) if cross_validation else (
+        train_dataset, valid_dataset, _ = self.prepare_data(transformed_ds, target_column) if use_validation_set else (
             transformed_ds, ray.data.from_items([]), None)
 
         # Get the propensities for each record
@@ -441,7 +441,7 @@ def run():
     result, value_replacer, features = trainer.run(
         assignments_with_ad_revenue=training_data,
         target_column=Schema.TOTAL_AMOUNT,
-        cross_validation=True
+        use_validation_set=True
     )
     print(result.metrics)
 

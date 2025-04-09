@@ -125,7 +125,7 @@ class TestModelTrainingRun:
             "propensities": [0.1, 0.2, 0.3],
         }))
 
-    def generic_model_training_test(self, model_object, training_data, cross_validation, drop_columns=None,
+    def generic_model_training_test(self, model_object, training_data, use_validation, drop_columns=None,
                                     expected_values=None):
         # Drop specified columns if any
         if drop_columns:
@@ -135,7 +135,7 @@ class TestModelTrainingRun:
         result, value_replacer, features = model_object.run(
             training_data,
             target_column="totalAmount",
-            cross_validation=cross_validation
+            use_validation_set=use_validation
         )
 
         # Extract the trained model
@@ -157,36 +157,36 @@ class TestModelTrainingRun:
         assert len(predicted_value) == training_data.count()
         np.testing.assert_allclose(predicted_value, np.array(expected_values), rtol=1e-3, atol=2e-2)
 
-    def test_train_without_cross_validation(self, model_object, training_data):
+    def test_train_without_validation(self, model_object, training_data):
         self.generic_model_training_test(
             model_object,
             training_data,
-            cross_validation=False,
+            use_validation=False,
             expected_values=[0.100221, 0.199911, 0.299453]
         )
 
-    def test_train_with_cross_validation(self, model_object, training_data):
+    def test_train_with_validation(self, model_object, training_data):
         self.generic_model_training_test(
             model_object,
             training_data,
-            cross_validation=True,
+            use_validation=True,
             expected_values=[0.10495479, 0.18830131, 0.10495479]
         )
 
-    def test_train_with_cross_validation_no_propensities(self, model_object, training_data):
+    def test_train_with_validation_no_propensities(self, model_object, training_data):
         self.generic_model_training_test(
             model_object,
             training_data,
-            cross_validation=True,
+            use_validation=True,
             drop_columns=["propensities"],
             expected_values=[0.10495479, 0.18830131, 0.10495479]
         )
 
-    def test_train_without_cross_validation_no_propensities(self, model_object, training_data):
+    def test_train_without_validation_no_propensities(self, model_object, training_data):
         self.generic_model_training_test(
             model_object,
             training_data,
-            cross_validation=False,
+            use_validation=False,
             drop_columns=["propensities"],
             expected_values=[0.101092, 0.200001, 0.298907]
         )
