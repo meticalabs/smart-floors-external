@@ -13,6 +13,7 @@ clean:
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 	rm -f poetry.lock
+	rm -fr target/
 
 format:
 	poetry run black .

@@ -8,6 +8,16 @@ packages = [{ include = "bid_optim_etl_py" }]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
+ray = { version = "2.44.1", extras = ["all"] }
+pyspark = "3.4.3"
+modin = { extras = ["all"], version = "^0.32" }
+scikit_learn = "1.2.2"
+numpy = "1.26.4"
+xgboost = "2.1.4"
+awswrangler = "3.11.0"
+matplotlib = "^3.10.1"
+boto3 = "^1.34"
+pyiceberg = { extras = ["glue"], version = "^0.9.0" }
 
 [tool.poetry.group.dev.dependencies]
 ruff = "0.0.291"
