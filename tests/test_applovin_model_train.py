@@ -162,7 +162,7 @@ class TestModelTrainingRun:
             model_object,
             training_data,
             cross_validation=False,
-            expected_values=[0.10945914, 0.1936189, 0.27249214]
+            expected_values=[0.100221, 0.199911, 0.299453]
         )
 
     def test_train_with_cross_validation(self, model_object, training_data):
@@ -188,5 +188,5 @@ class TestModelTrainingRun:
             training_data,
             cross_validation=False,
             drop_columns=["propensities"],
-            expected_values=[0.13584857, 0.2, 0.2641514]
+            expected_values=[0.101092, 0.200001, 0.298907]
         )

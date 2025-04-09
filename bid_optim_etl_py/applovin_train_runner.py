@@ -52,7 +52,6 @@ class Schema:
 @dataclass(frozen=True)
 class Field:
     name: str
-    default_value: Union[str, int, float]
     dtype: str
     feature_column: bool = True
     target_column: bool = False
@@ -91,8 +90,6 @@ class Features:
 
             if field.dtype == "category":
                 df[field.name] = df[field.name].replace({None: np.nan}).astype(field.dtype)
-            elif field.dtype == "int" or field.dtype == "float":
-                df[field.name] = df[field.name].fillna(field.default_value).astype(field.dtype)
 
         if prediction_phase:
             ordered_features = [f.name for f in self.fields_sorted() if f.feature_column]
@@ -123,22 +120,22 @@ class ModelTrainer:
 
     def __post_init__(self):
         self.features = Features([
-            Field(name="user.country", default_value="other", dtype="category"),
-            Field(name="user.languageCode", default_value="other", dtype="category"),
-            Field(name="user.deviceType", default_value="other", dtype="category"),
-            Field(name="user.osVersion", default_value="other", dtype="category"),
-            Field(name="user.deviceModel", default_value="other", dtype="category"),
-            Field(name="assignmentDayOfWeek", default_value=0, dtype="int"),
-            Field(name="assignmentHourOfDay", default_value=0, dtype="int"),
-            Field(name="user.minRevenueLast24Hours", default_value=0.0, dtype="float"),
-            Field(name="user.avgRevenueLast24Hours", default_value=0.0, dtype="float"),
-            Field(name="user.avgRevenueLast48Hours", default_value=0.0, dtype="float"),
-            Field(name="user.avgRevenueLast72Hours", default_value=0.0, dtype="float"),
-            Field(name="user.mostRecentAdSource", default_value="other", dtype="category"),
-            Field(name="user.mostRecentAdRevenue", default_value=0.0, dtype="float"),
-            Field(name="highestBidFloorValue", default_value=0.0, dtype="float"),
-            Field(name="mediumBidFloorValue", default_value=0.0, dtype="float"),
-            Field(name="totalAmount", default_value=0.0, dtype="float", target_column=True, feature_column=False)
+            Field(name="user.country", dtype="category"),
+            Field(name="user.languageCode", dtype="category"),
+            Field(name="user.deviceType", dtype="category"),
+            Field(name="user.osVersion", dtype="category"),
+            Field(name="user.deviceModel", dtype="category"),
+            Field(name="assignmentDayOfWeek", dtype="int"),
+            Field(name="assignmentHourOfDay", dtype="int"),
+            Field(name="user.minRevenueLast24Hours", dtype="float"),
+            Field(name="user.avgRevenueLast24Hours", dtype="float"),
+            Field(name="user.avgRevenueLast48Hours", dtype="float"),
+            Field(name="user.avgRevenueLast72Hours", dtype="float"),
+            Field(name="user.mostRecentAdSource", dtype="category"),
+            Field(name="user.mostRecentAdRevenue", dtype="float"),
+            Field(name="highestBidFloorValue", dtype="float"),
+            Field(name="mediumBidFloorValue", dtype="float"),
+            Field(name="totalAmount", dtype="float", target_column=True, feature_column=False)
         ])
 
         self.weight_column = "propensities"
@@ -285,7 +282,6 @@ class ModelTrainer:
             "learning_rate": 0.1,
             "max_depth": 3,
             "random_state": 42,
-            "enable_categorical": True,
             "eval_metric": ["rmse"],
             "missing": np.nan
         }
@@ -401,7 +397,7 @@ class ModelTrainer:
             train_loop_per_worker=self._train_fn_per_worker,
             train_loop_config={
                 "target_column": target_column,
-                "num_boost_round": 20,
+                "num_boost_round": 100,
                 "feature_columns": self.features.fields_sorted(),
             },
             scaling_config=ScalingConfig(num_workers=num_workers, use_gpu=False),
