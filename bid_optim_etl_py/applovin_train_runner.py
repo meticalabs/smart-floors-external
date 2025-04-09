@@ -226,7 +226,8 @@ class ModelTrainer:
         Trains an XGBoost model on worker-specific data shards and evaluates it on validation data if available.
 
         Detailed Steps:
-        - Extracts training and evaluation datasets from Ray Train's dataset shards and converts them to pandas DataFrames.
+        - Extracts training and evaluation datasets from Ray Train's dataset shards and converts them to pandas
+        DataFrames.
         - Ensures compatibility of data, handling edge cases such as empty datasets or Series format, and prepares
           the data for XGBoost training and validation.
         - Configures relevant training parameters, including model objective, tree method, learning rate, etc.
@@ -271,10 +272,11 @@ class ModelTrainer:
             train_X, train_y = train_df.drop(columns=[target_column]), train_df[target_column]
             eval_X, eval_y = (eval_df.drop(columns=[target_column]), eval_df[target_column]) if not eval_df.empty else (
                 None, None)
-            dtrain = xgboost.DMatrix(train_X, label=train_y, enable_categorical=True,
-                                     weight=None if train_weights_df.empty else train_weights_df)
-            deval = xgboost.DMatrix(eval_X, label=eval_y, enable_categorical=True,
-                                    weight=None if eval_weights_df.empty else eval_weights_df) if eval_X is not None else None
+            train_weights_df = None if train_weights_df.empty else train_weights_df
+            eval_weights_df = None if eval_weights_df.empty else eval_weights_df
+            dtrain = xgboost.DMatrix(train_X, label=train_y, enable_categorical=True, weight=train_weights_df)
+            deval = (xgboost.DMatrix(eval_X, label=eval_y, enable_categorical=True,
+                                     weight=eval_weights_df) if eval_X is not None else None)
 
         # Training parameters
         params = {
@@ -306,11 +308,11 @@ class ModelTrainer:
         is_valid_data_empty = valid_dataset is None or valid_dataset.limit(1).count() == 0
 
         train_weights = train_dataset.select_columns([
-            self.weight_column]) if not is_train_data_empty and self.weight_column in train_dataset.columns() else ray.data.from_items(
-            [])
+            self.weight_column]) if not is_train_data_empty and self.weight_column in train_dataset.columns() \
+            else ray.data.from_items([])
         valid_weights = (valid_dataset.select_columns([
-            self.weight_column]) if not is_valid_data_empty and self.weight_column in valid_dataset.columns() else ray.data.from_items(
-            []))
+            self.weight_column]) if not is_valid_data_empty and self.weight_column in valid_dataset.columns()
+                         else ray.data.from_items([]))
 
         # Perform 1 / self.weight_column to get the inverse of the weights
         def inverse_propensity(df: pd.DataFrame) -> pd.DataFrame:

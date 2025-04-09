@@ -15,7 +15,8 @@ class TableConfig:
     table_name: str
 
     def db_table_name(self, catalog_name: str = None) -> str:
-        return f"{catalog_name}.{self.database_name}.{self.table_name}" if catalog_name else f"{self.database_name}.{self.table_name}"
+        return (f"{catalog_name}.{self.database_name}.{self.table_name}"
+                if catalog_name else f"{self.database_name}.{self.table_name}")
 
 
 @dataclass(kw_only=True)
