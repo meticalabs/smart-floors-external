@@ -99,7 +99,8 @@ class Events:
         ])
 
     def read_events_parquet(self, event_name, columns: Optional[list[str]] = None):
-        path = f"{sanitise_path(self.s3_data_bucket)}/ingested-events-parquet/customerId={self.customer_id}/appId={self.app_id}/{event_name}/"
+        path = (f"{sanitise_path(self.s3_data_bucket)}/ingested-events-parquet/"
+                f"customerId={self.customer_id}/appId={self.app_id}/{event_name}/")
         try:
             dataset = self.spark.read.option("mergeSchema", "true").parquet(path)
             return dataset.select(columns) if columns else dataset
