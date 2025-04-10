@@ -68,7 +68,7 @@ jobs:
         shell: bash -el {0}
         run: |
           pip install tomli
-          NAME=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['name'])")
+          NAME=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['name'].replace('-', '_'))")
           VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
           echo "project_version=$VERSION" >> $GITHUB_OUTPUT
           echo "project_name=$NAME" >> $GITHUB_OUTPUT
