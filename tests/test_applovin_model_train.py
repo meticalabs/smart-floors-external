@@ -88,13 +88,14 @@ class TestImpressionCount:
         assert all(col in transformed_data.columns for col in ["category", "adUnitId", "device"])
         assert "not_present" not in transformed_data.columns
         pd.testing.assert_frame_equal(
-            transformed_data[["category", "adUnitId", "device", "NoneCol"]].sort_values(by=["category", "adUnitId"]),
+            transformed_data[["category", "adUnitId", "device", "NoneCol"]].sort_values(
+                by=["category", "adUnitId", "device", "NoneCol"]),
             pd.DataFrame({
                 "category": ["A", "B", "A", "C", "B", "A", "C", "C", "other", "other"],
                 "adUnitId": ["a", "b", "a", "a", "a", "b", "a", "a", "other", "a"],
                 "device": ["iPhone"] * 9 + ["other"],
                 "NoneCol": [None] * 10
-            }).sort_values(by=["category", "adUnitId"]),
+            }).sort_values(by=["category", "adUnitId", "device", "NoneCol"]),
             check_dtype=False,
             check_exact=False,
             check_like=True,
