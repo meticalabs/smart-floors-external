@@ -67,6 +67,11 @@ jobs:
       - name: Get project name and version
         shell: bash -el {0}
         run: |
+          echo "Current directory:"
+          pwd || { echo "pwd command failed"; exit 1; }
+          echo "Checking pyproject.toml content:"
+          cat ./pyproject.toml || { echo "pyproject.toml not found"; exit 1; }
+          
           NAME=$(grep 'name' ./pyproject.toml | head -n 1 | awk -F= '{gsub(/"/,"", $2); print $2}' | sed s'/ //g')
           VERSION=$(grep -m 1 version ./pyproject.toml | grep -e '\d.\d.\d' -o)
           echo "project_version=$VERSION" >> $GITHUB_OUTPUT
