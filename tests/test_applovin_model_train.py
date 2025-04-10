@@ -142,7 +142,7 @@ class TestModelTrainingRun:
             "highestBidFloorValue": [1.0, 0.2, 0.5],
             "mediumBidFloorValue": [0.5, 0.2, 0.3],
             "totalAmount": [0.1, 0.2, 0.3],
-            "propensities": [0.1, 0.2, 0.3],
+            "propensity": [0.1, 0.2, 0.3],
         }))
 
     def generic_model_training_test(self, model_object, training_data, use_validation, drop_columns=None,
@@ -198,7 +198,7 @@ class TestModelTrainingRun:
             model_object,
             training_data,
             use_validation=True,
-            drop_columns=["propensities"],
+            drop_columns=["propensity"],
             expected_values=[0.10495479, 0.18830131, 0.10495479]
         )
 
@@ -207,6 +207,6 @@ class TestModelTrainingRun:
             model_object,
             training_data,
             use_validation=False,
-            drop_columns=["propensities"],
+            drop_columns=["propensity"],
             expected_values=[0.101092, 0.200001, 0.298907]
         )

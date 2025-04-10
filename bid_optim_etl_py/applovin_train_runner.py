@@ -1,15 +1,17 @@
 import datetime
 import itertools
 import logging
+import os
 from dataclasses import dataclass
 from typing import Tuple, Optional
 
+import boto3
 import numpy as np
 import pandas as pd
 import ray
 import xgboost
 from pyiceberg.catalog import load_catalog
-from pyiceberg.expressions import EqualTo
+from pyiceberg.expressions import EqualTo, LessThanOrEqual
 from ray.data import Dataset
 from ray.train import CheckpointConfig, RunConfig, ScalingConfig, Result
 from ray.train.xgboost import RayTrainReportCallback
@@ -50,7 +52,7 @@ class Schema:
     IS_FILLED: str = "isFilled"
     CPM_FLOOR_AD_UNIT_ID: str = "cpmFloorAdUnitId"
     CPM_FLOOR_VALUE: str = "cpmFloorValue"
-    DATE = "date"
+    ASSIGNMENT_DATE = "assignmentDate"
     LAST_UPDATE_TIME = "lastUpdateTime"
     CUSTOMER_ID = "customerId"
     APP_ID = "appId"
@@ -148,7 +150,7 @@ class ModelTrainer:
             Field(name="totalAmount", dtype="float32", target_column=True, feature_column=False)
         ])
 
-        self.weight_column = "propensities"
+        self.weight_column = "propensity"
 
     def _run_config(self, storage_path: Optional[str] = None) -> RunConfig:
         return RunConfig(
@@ -277,8 +279,7 @@ class ModelTrainer:
             "tree_method": "hist",
             "objective": "reg:squarederror",
             "learning_rate": 0.1,
-            "max_depth": 3,
-            "random_state": 42,
+            "max_depth": 4,
             "eval_metric": ["rmse", "mae"]
         }
 
@@ -412,22 +413,29 @@ def arg_parser():
     parser.add_argument('--customerId', type=int, help='Customer ID')
     parser.add_argument('--appId', type=int, help='App ID')
     parser.add_argument('--modelId', type=str, help='Model ID')
+    parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
     parser.add_argument('--icebergTrainDataTable', help='Iceberg db table name for training data')
+    parser.add_argument('--s3ModelArtifactBucket', help='S3 bucket name for model artifact')
     return parser.parse_args()
 
 
-def read_training_data(iceberg_train_data: str, customer_id: int, app_id: int, model_id: str,
+def read_training_data(iceberg_train_data: str, customer_id: int, app_id: int, model_id: str, date: datetime.date,
                        num_blocks: Optional[int] = None) -> ray.data.Dataset:
-    catalog = load_catalog(name="default", type="glue")
-    table = catalog.load_table(iceberg_train_data)
-    table_data = (
-        table.scan(row_filter=EqualTo(Schema.CUSTOMER_ID, customer_id) &
-                              EqualTo(Schema.APP_ID, app_id) &
-                              EqualTo(Schema.MODEL_ID, model_id)
-                   ).to_ray()
-    )
-    if num_blocks:
-        return table_data.repartition(num_blocks)
+    try:
+        catalog = load_catalog(name="default", type="glue")
+        table = catalog.load_table(iceberg_train_data)
+        table_data = (
+            table.scan(row_filter=EqualTo(Schema.CUSTOMER_ID, customer_id) &
+                                  EqualTo(Schema.APP_ID, app_id) &
+                                  EqualTo(Schema.MODEL_ID, model_id) &
+                                  LessThanOrEqual(Schema.ASSIGNMENT_DATE, date.strftime("%Y-%m-%d"))
+                       ).to_ray()
+        )
+        if num_blocks:
+            return table_data.repartition(num_blocks)
+    except Exception:
+        logging.exception("Error reading training data from Iceberg table")
+        return ray.data.from_items([])
     return table_data
 
 
@@ -521,17 +529,70 @@ class Predictor:
         return self.form_response(best_bid_floor_combo["adUnit"], lowest_bid_floor, propensity)
 
 
+@dataclass
+class S3ModelArtifactInfo:
+    bucket: str
+    key: str
+    file_name: str
+    file_name_wo_ext: str
+
+
+def upload_model_file_to_s3(local_model_base_path, model_artifact_path: S3ModelArtifactInfo):
+    boto3_client = boto3.client("s3")
+    boto3_client.upload_file(
+        os.path.join(local_model_base_path, model_artifact_path.file_name),
+        model_artifact_path.bucket,
+        model_artifact_path.key,
+    )
+
+
+def save_predictor_model_to_s3(predictor: Predictor, app_id: str, model_artifact_path: S3ModelArtifactInfo):
+    """
+    Save the predictor model to S3.
+    """
+    import joblib
+
+    logging.info(f"Saving model to S3: {model_artifact_path.bucket}/{model_artifact_path.key}")
+
+    # Save the model locally
+    local_model_base_path = os.path.join("/tmp", app_id)
+
+    joblib.dump(predictor, os.path.join(local_model_base_path, model_artifact_path.file_name))
+
+    # Upload to S3
+    upload_model_file_to_s3(local_model_base_path, model_artifact_path)
+
+
 def run():
     args = arg_parser()
     init_ray_cluster()
-    training_data = read_training_data(args.icebergTrainDataTable, args.customerId, args.appId, args.modelId)
-    trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
-    result, value_replacer, features = trainer.run(
-        assignments_with_ad_revenue=training_data,
-        target_column=Schema.TOTAL_AMOUNT,
-        use_validation_set=True
+    training_data = read_training_data(args.icebergTrainDataTable, args.customerId, args.appId, args.modelId,
+                                       datetime.date.fromisoformat(args.date))
+
+    result, value_replacer, features = None, None, None
+
+    if training_data.limit(1).count() != 0:
+        logging.warning("Training data is empty, hence skipping model training")
+        trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
+        result, value_replacer, features = trainer.run(
+            assignments_with_ad_revenue=training_data,
+            target_column=Schema.TOTAL_AMOUNT,
+            use_validation_set=True
+        )
+
+    predictor = Predictor(
+        epsilon=0.1,
+        clf=RayTrainReportCallback.get_model(result.checkpoint) if result.checkpoint else None,
+        value_replacer=value_replacer,
+        features=features
     )
-    print(result.metrics)
+
+    save_predictor_model_to_s3(predictor, args.appId, S3ModelArtifactInfo(
+        bucket=args.s3ModelArtifactBucket,
+        key=f"bid_floor_models/{args.date}/{args.customerId}/{args.appId}/",
+        file_name=f"{args.modelId}.joblib",
+        file_name_wo_ext=args.modelId
+    ))
 
 
 if __name__ == '__main__':

@@ -1,0 +1,94 @@
+# This action will perform clean, format, install and test the python src
+
+name: SageMaker Inference Docker Publish
+description: "Publish Bid Floor Docker image to AWS ECR for SageMaker Inference"
+inputs:
+  python_version:
+    required: true
+    default: '3.10'
+    description: 'Python version to use for installation'
+  github_token:
+    required: true
+    description: 'Secret token for accessing GitHub packages'
+  bid_floor_model_version:
+    required: true
+    description: 'Bid Floor Model version to use for installation'
+  image_tag_postfix:
+    required: false
+    description: 'Docker image tag postfix added'
+    default: ''
+  aws_region:
+    required: true
+    description: 'AWS region to deploy'
+  ecr_repo:
+    required: true
+    description: 'ECR Repo Name'
+  arm:
+    required: false
+    description: 'Deploy to ARM architecture'
+    default: 'false'
+  gh_openid_role_arn:
+    required: true
+    description: 'GH Open ID Role Arn'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v3
+
+    - name: Poetry build all
+      uses: meticalabs/gh_workflows/.github/actions/poetry-conda-install@main
+      with:
+        github_token: ${{ secrets.CI_GITHUB_TOKEN }}
+        python_version: ${{ inputs.python_version }}
+        branch: ${{ env.BRANCH_NAME }}
+        run_make_all: true
+
+    - name: Get project name and version
+      run: |
+        NAME=$( poetry version | awk {'print $1'} | sed s/\-/\_/g )
+        VERSION=$( poetry version | awk {'print $2'} )
+        echo "poetry_version=$VERSION" >> $GITHUB_OUTPUT
+        echo "poetry_name=$NAME" >> $GITHUB_OUTPUT
+      id: project
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.GH_OPENID_ROLE_ARN }}
+        aws-region: ${{ inputs.aws_region }}
+
+    - name: Building tar from venv and publishing to s3
+      shell: bash -el {0}
+      run: |
+        export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" \
+        $(aws sts assume-role \
+        --role-arn ${{env.ROLE}} \
+        --role-session-name MySessionName \
+        --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
+        --output text))
+        python --version
+        wheel_file_name=$(ls *.whl)
+        proj_wheel_file=$(echo "${{steps.project.outputs.poetry_name}}-${{steps.project.outputs.poetry_version}}-py3-none-any.whl")
+        echo "app_wheel_file_name=$wheel_file_name" >> $GITHUB_ENV
+        echo "app_wheel_file_path=$(pwd)/$wheel_file_name" >> $GITHUB_ENV
+        
+        echo "Deploying Docker image to AWS ECR"
+        AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+        IMAGE_TAG=${{ inputs.bid_floor_model_version }}
+        if [[ -n "${{ inputs.image_tag_postfix }}" ]]; then
+          IMAGE_TAG=${{ inputs.bid_floor_model_version }}.${{ inputs.image_tag_postfix }}
+        fi
+        aws ecr get-login-password --region ${{ inputs.aws_region }} | docker login --username AWS --password-stdin $AWS_ACCOUNT.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com
+        ECR_REGISTRY=$AWS_ACCOUNT.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com
+        
+        echo "Creating ECR Repository $ECR_REGISTRY/${{inputs.ecr_repo}} if not exists with image tag mutable"
+        aws ecr describe-repositories --repository-names ${{inputs.ecr_repo}} || aws ecr create-repository --repository-name ${{inputs.ecr_repo}} --image-tag-mutability MUTABLE
+        
+        echo "docker build -t $ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG --build-arg APP_WHEEL_FILE=app_wheel_file_name ${{ inputs.arm == 'true' && '--platform linux/arm64' || '' }} ."
+        docker build -t $ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG --build-arg APP_WHEEL_FILE=app_wheel_file_name ${{ inputs.arm == 'true' && '--platform linux/arm64' || '' }}.
+        docker push $ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG
+        echo "image=$ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG"
+        
+        echo "Create folder within artifacts s3 bucket for storing sagemaker inference image"
+        aws s3api put-object --bucket com.metica.${{env.ENVIRONMENT}}.dplat.artifacts --key sagemaker_inference/bid-floor-$IMAGE_TAG/
