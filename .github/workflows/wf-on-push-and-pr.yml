@@ -19,6 +19,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          # Install a specific version of uv.
+          version: "0.6.14"
+
       - name: CI build - all
         uses: meticalabs/gh_workflows/.github/actions/poetry-conda-install@main
         with:

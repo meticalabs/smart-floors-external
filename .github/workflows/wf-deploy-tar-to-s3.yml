@@ -50,7 +50,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Poetry build all
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          # Install a specific version of uv.
+          version: "0.6.14"
+
+      - name: Make All
         uses: meticalabs/gh_workflows/.github/actions/poetry-conda-install@main
         with:
           github_token: ${{ secrets.CI_GITHUB_TOKEN }}
@@ -60,10 +66,10 @@ jobs:
 
       - name: Get project name and version
         run: |
-          NAME=$( poetry version | awk {'print $1'} | sed s/\-/\_/g )
-          VERSION=$( poetry version | awk {'print $2'} )
-          echo "poetry_version=$VERSION" >> $GITHUB_OUTPUT
-          echo "poetry_name=$NAME" >> $GITHUB_OUTPUT
+          NAME=$( grep 'name' pyproject.toml | head -n 1 | awk -F= '{gsub(/"/,"", $2); print $2}' | sed s'/ //g' )
+          VERSION=$( grep -m 1 version pyproject.toml | grep -e '\d.\d.\d' -o )
+          echo "project_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "project_name=$NAME" >> $GITHUB_OUTPUT
         id: project
 
       - name: Configure AWS credentials
@@ -85,9 +91,9 @@ jobs:
           conda activate test
           conda info
           python --version
-          proj_wheel_file=$(echo "${{steps.project.outputs.poetry_name}}-${{steps.project.outputs.poetry_version}}-py3-none-any.whl")
+          proj_wheel_file=$(echo "${{steps.project.outputs.project_name}}-${{steps.project.outputs.project_version}}-py3-none-any.whl")
           s3_env_target=$(echo "s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/pyspark/envs/")
-          env_tar=$(echo "${{steps.project.outputs.poetry_name}}-${{steps.project.outputs.poetry_version}}.tar.gz")
+          env_tar=$(echo "${{steps.project.outputs.project_name}}-${{steps.project.outputs.project_version}}.tar.gz")
           echo "Building $env_tar file from venv"
           which python
           python -m pip install ./dist/$proj_wheel_file

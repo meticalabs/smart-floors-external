@@ -1,28 +1,49 @@
-[tool.poetry]
+[project]
 name = "bid-optim-etl-py"
 version = "0.1.0"
 description = "Implementation of bid floor optimisation training and inference"
-authors = ["Subash Prabanantham <subash@metica.com>", "Rowan Swiers <rowan@metica.com>", "Andrew Maher <andrew@metica.com>"]
+authors = [
+    { name = "Subash Prabanantham", email = "subash@metica.com" },
+    { name = "Rowan Swiers", email = "rowan@metica.com" },
+    { name = "Andrew Maher", email = "andrew@metica.com" },
+]
+requires-python = ">=3.10,<3.13"
 readme = "README.md"
-packages = [{ include = "bid_optim_etl_py" }]
+dependencies = [
+    "ray[all]==2.44.1",
+    "pyspark==3.4.3",
+    "numpy==1.26.4",
+    "xgboost==2.1.4",
+    "boto3~=1.34",
+    "pyiceberg[glue]>=0.9.0,<0.10",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.13"
-ray = { version = "2.44.1", extras = ["all"] }
-pyspark = "3.4.3"
-numpy = "1.26.4"
-xgboost = "2.1.4"
-boto3 = "^1.34"
-pyiceberg = { extras = ["glue"], version = "^0.9.0" }
+[dependency-groups]
+dev = [
+    "ruff==0.0.291",
+    "black>=23.9.1,<24",
+]
+test = [
+    "coverage==7.3.1",
+    "pytest==7.4.0",
+    "pytest-order>=1.2.1,<2",
+]
 
-[tool.poetry.group.dev.dependencies]
-ruff = "0.0.291"
-black = "^23.9.1"
+[tool.uv]
+default-groups = [
+    "dev",
+    "test",
+]
 
-[tool.poetry.group.test.dependencies]
-coverage = "7.3.1"
-pytest = "7.4.0"
-pytest-order = "^1.2.1"
+[tool.hatch.build.targets.sdist]
+include = ["bid_optim_etl_py"]
+
+[tool.hatch.build.targets.wheel]
+include = ["bid_optim_etl_py"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.black]
 line-length = 120
@@ -73,7 +94,3 @@ line-length = 120
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["E402"]
 "**/{tests,docs,tools}/*" = ["E402"]
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
