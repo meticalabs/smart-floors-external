@@ -9,9 +9,9 @@ from ray.train.xgboost import RayTrainReportCallback
 from bid_optim_etl_py.applovin_train_runner import ModelTrainer, ValueReplacer
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session", autouse=True)
 def ray_cluster():
-    ray.init(address="local")
+    ray.init()
     yield
     ray.shutdown()
 
