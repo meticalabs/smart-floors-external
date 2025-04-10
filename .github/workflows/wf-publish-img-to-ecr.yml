@@ -1,0 +1,77 @@
+name: Publish SageMaker Beagle Docker
+
+on:
+  workflow_dispatch:
+    inputs:
+      python_version:
+        required: false
+        type: string
+        description: 'Python version'
+        default: '3.10'
+      aws_region:
+        required: false
+        type: choice
+        description: 'AWS region to deploy'
+        default: 'us-east-1'
+        options:
+          - us-east-1
+          - eu-west-1
+      bid_floor_model_version:
+        required: true
+        description: 'Bid Floor Model version to use for installation'
+      image_tag_postfix:
+        required: false
+        description: 'Docker image tag postfix added'
+        default: ''
+      ecr_repo:
+        required: false
+        default: 'com.metica.ml.beagle-sagemaker-byoc'
+        description: 'ECR Repo to deploy'
+      arm:
+        required: false
+        description: 'ARM based docker image'
+        default: 'false'
+env:
+  us_east_1: dev
+  eu_west_1: prod-eu
+  us_east_1_role: ${{ secrets.DEV_AWS_DEPLOY_ROLE }}
+  eu_west_1_role: ${{ secrets.PROD_EU_AWS_DEPLOY_ROLE }}
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+jobs:
+  variables:
+    outputs:
+      ENVIRONMENT: ${{ steps.var.outputs.ENVIRONMENT }}
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Setting global variables
+        uses: actions/github-script@v6
+        id: var
+        with:
+          script: |
+            core.setOutput('ENVIRONMENT', '${{ inputs.aws_region }}'.toLowerCase().replaceAll(/[/-]/g, '_').trim('_'));
+  build:
+    needs: [ variables ]
+    runs-on: ubuntu-latest-m
+    env:
+      CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+      ENVIRONMENT: $${{ needs.variables.outputs.ENVIRONMENT }}
+      ROLE: $${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Docker deploy
+        uses: meticalabs/bid-optim-etl-py/.github/actions/publish-docker@main
+        with:
+          github_token: ${{ secrets.CI_GITHUB_TOKEN }}
+          python_version: ${{ inputs.python_version }}
+          bid_floor_model_version: ${{ inputs.bid_floor_model_version }}
+          image_tag_postfix: ${{ inputs.image_tag_postfix }}
+          aws_region: ${{ inputs.aws_region }}
+          ecr_repo: ${{ inputs.ecr_repo }}
+          arm: ${{ inputs.arm }}
+          gh_openid_role_arn: ${{ secrets.GH_OPENID_ROLE_ARN }}

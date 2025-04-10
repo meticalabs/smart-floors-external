@@ -11,7 +11,7 @@ from bid_optim_etl_py.applovin_train_runner import ModelTrainer, ValueReplacer
 
 @pytest.fixture(scope="session", autouse=True)
 def ray_cluster():
-    ray.init()
+    ray.init(num_cpus=4)
     yield
     ray.shutdown()
 

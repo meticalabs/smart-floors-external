@@ -51,12 +51,12 @@ runs:
         run_make_all: true
 
     - name: Get project name and version
+      shell: bash -el {0}
       run: |
-        NAME=$( grep 'name' pyproject.toml | head -n 1 | awk -F= '{gsub(/"/,"", $2); print $2}' | sed s'/ //g' )
-        VERSION=$( grep -m 1 version pyproject.toml | grep -e '\d.\d.\d' -o )
+        NAME=$(grep 'name' ./pyproject.toml | head -n 1 | awk -F= '{gsub(/"/,"", $2); print $2}' | sed s'/ //g')
+        VERSION=$(grep -m 1 version ./pyproject.toml | grep -e '\d.\d.\d' -o)
         echo "project_version=$VERSION" >> $GITHUB_OUTPUT
         echo "project_name=$NAME" >> $GITHUB_OUTPUT
-      id: project
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
