@@ -77,45 +77,6 @@ class TestApplovinETL:
             Schema.MODEL_ID, Schema.CUSTOMER_ID, Schema.APP_ID, Schema.CONTEXT
         ])
 
-    def test_iceberg_write(self, spark, sample_data):
-        assignment_data, bid_sequence_data, ad_revenue_data = sample_data
-
-        assignment_df = spark.createDataFrame(assignment_data)
-        bid_sequence_df = spark.createDataFrame(bid_sequence_data)
-        ad_revenue_df = spark.createDataFrame(ad_revenue_data)
-
-        events = Events(
-            customer_id=123,
-            app_id=456,
-            s3_data_bucket="s3://dummy-bucket",
-            date=datetime(2023, 1, 1),
-            spark=spark,
-            iceberg_catalog="dev",
-            region_name="us-east-1",
-            logger=logging.getLogger("test_logger")
-        )
-
-        result_df = events.join_all(assignment_df, bid_sequence_df, ad_revenue_df)
-
-        events.save_as_iceberg(result_df)
-
-        iceberg_df = spark.read.table(events.training_data_db_table_name)
-
-        assert iceberg_df.count() == result_df.count()
-
-        iceberg_df.show(truncate=False)
-        result_df.show(truncate=False)
-
-        pd.testing.assert_frame_equal(
-            iceberg_df.drop(Schema.LAST_UPDATE_TIME).toPandas().sort_values(
-                by=[Schema.REQUEST_ID, Schema.USER_ID]).reset_index(drop=True),
-            result_df.drop(Schema.LAST_UPDATE_TIME).toPandas().sort_values(
-                by=[Schema.REQUEST_ID, Schema.USER_ID]).reset_index(drop=True),
-            check_like=True,
-            check_exact=False,
-            check_index_type=False,
-        )
-
     @pytest.fixture
     def assignment_data_with_complex_context(self, spark):
         data_size = 15

@@ -80,7 +80,6 @@ class TestImpressionCount:
         output = value_replacer.transform_series(pd.Series(input_data))
         assert output.to_dict() == expected_output
 
-    @pytest.mark.skip
     def test_map_batches(self, ray_cluster, sample_dataset):
         trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
         result = trainer.value_replacer_based_on_impressions(sample_dataset,
