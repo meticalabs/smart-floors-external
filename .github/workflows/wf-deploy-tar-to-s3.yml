@@ -72,8 +72,8 @@ jobs:
           echo "Checking pyproject.toml content:"
           cat ./pyproject.toml || { echo "pyproject.toml not found"; exit 1; }
           
-          NAME=$(grep 'name' ./pyproject.toml | head -n 1 | awk -F= '{gsub(/"/,"", $2); print $2}' | sed s'/ //g')
-          VERSION=$(grep -m 1 version ./pyproject.toml | grep -e '\d.\d.\d' -o)
+          NAME=$(grep 'name' ./pyproject.toml | head -n 1 | awk -F' *= *' '{print $2}' | tr -d '"[:space:]')
+          VERSION=$(grep -m 1 'version' ./pyproject.toml | grep -e '\d.\d.\d' -o)
           echo "project_version=$VERSION" >> $GITHUB_OUTPUT
           echo "project_name=$NAME" >> $GITHUB_OUTPUT
         id: project
