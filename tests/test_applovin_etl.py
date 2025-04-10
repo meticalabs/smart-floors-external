@@ -4,7 +4,6 @@ import random
 import uuid
 from datetime import datetime
 
-import pandas as pd
 import pytest
 from pyspark.sql import Row
 
