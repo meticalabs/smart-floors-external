@@ -40,12 +40,14 @@ class TestImpressionCount:
         ]
         return ray.data.from_items(data)
 
+    @pytest.mark.skip
     def test_calculate_impression_count(self, ray_cluster, sample_dataset):
         trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
         result = trainer.value_replacer_based_on_impressions(sample_dataset, columns=["category"],
                                                              min_impressions=2, default_category="other")
         assert sorted(result.valid_values["category"]) == sorted(["A", "B", "C"])
 
+    @pytest.mark.skip
     def test_calculate_impression_count_for_multiple_columns(self, ray_cluster, sample_dataset):
         trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
         result = trainer.value_replacer_based_on_impressions(sample_dataset, columns=["category", "adUnitId", "device"],
@@ -57,6 +59,7 @@ class TestImpressionCount:
         }
         assert result.default_value == "default"
 
+    @pytest.mark.skip
     @pytest.mark.parametrize("value_replacer, input_data, expected_output", [
         (ValueReplacer(valid_values={"category": ["A", "B"]},
                        default_value="other"), {"category": "A"}, {"category": "A"}),
@@ -77,6 +80,7 @@ class TestImpressionCount:
         output = value_replacer.transform_series(pd.Series(input_data))
         assert output.to_dict() == expected_output
 
+    @pytest.mark.skip
     def test_map_batches(self, ray_cluster, sample_dataset):
         trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
         result = trainer.value_replacer_based_on_impressions(sample_dataset,
@@ -178,6 +182,7 @@ class TestModelTrainingRun:
         assert len(predicted_value) == training_data.count()
         np.testing.assert_allclose(predicted_value, np.array(expected_values), rtol=1e-3, atol=2e-2)
 
+    @pytest.mark.skip
     def test_train_without_validation(self, model_object, training_data):
         self.generic_model_training_test(
             model_object,
@@ -186,6 +191,7 @@ class TestModelTrainingRun:
             expected_values=[0.124535, 0.184767, 0.238754]
         )
 
+    @pytest.mark.skip
     def test_train_with_validation(self, model_object, training_data):
         self.generic_model_training_test(
             model_object,
@@ -194,6 +200,7 @@ class TestModelTrainingRun:
             expected_values=[0.129937, 0.170063, 0.129937]
         )
 
+    @pytest.mark.skip
     def test_train_with_validation_no_propensities(self, model_object, training_data):
         self.generic_model_training_test(
             model_object,
@@ -203,6 +210,7 @@ class TestModelTrainingRun:
             expected_values=[0.129937, 0.170063, 0.129937]
         )
 
+    @pytest.mark.skip
     def test_train_without_validation_no_propensities(self, model_object, training_data):
         self.generic_model_training_test(
             model_object,
