@@ -67,9 +67,11 @@ jobs:
       - name: Get project name and version
         shell: bash -el {0}
         run: |
-          VERSION=$(grep -m 1 'version' ./pyproject.toml | grep -e '\d.\d.\d' -o)
+          pip install tomli
+          NAME=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['name'])")
+          VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
           echo "project_version=$VERSION" >> $GITHUB_OUTPUT
-          echo "project_name=bid-optim-etl-py" >> $GITHUB_OUTPUT
+          echo "project_name=$NAME" >> $GITHUB_OUTPUT
         id: project
 
       - name: Configure AWS credentials
