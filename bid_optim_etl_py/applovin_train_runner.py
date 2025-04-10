@@ -129,6 +129,7 @@ class ModelTrainer:
     model_id: str
     date: datetime.datetime
     s3_checkpoint_path: Optional[str] = None
+    num_boost_round: int = 100
 
     def __post_init__(self):
         self.features = Features([
@@ -396,7 +397,7 @@ class ModelTrainer:
             train_loop_per_worker=self._train_fn_per_worker,
             train_loop_config={
                 "target_column": target_column,
-                "num_boost_round": 100,
+                "num_boost_round": self.num_boost_round,
                 "feature_columns": self.features.fields_sorted(),
             },
             scaling_config=ScalingConfig(num_workers=num_workers, use_gpu=False),

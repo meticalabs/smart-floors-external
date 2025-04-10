@@ -18,7 +18,8 @@ def ray_cluster():
 
 @pytest.fixture
 def model_object():
-    return ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
+    return ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now(),
+                        num_boost_round=10)
 
 
 class TestImpressionCount:
@@ -182,7 +183,7 @@ class TestModelTrainingRun:
             model_object,
             training_data,
             use_validation=False,
-            expected_values=[0.100221, 0.199911, 0.299453]
+            expected_values=[0.124535, 0.184767, 0.238754]
         )
 
     def test_train_with_validation(self, model_object, training_data):
@@ -190,7 +191,7 @@ class TestModelTrainingRun:
             model_object,
             training_data,
             use_validation=True,
-            expected_values=[0.10495479, 0.18830131, 0.10495479]
+            expected_values=[0.129937, 0.170063, 0.129937]
         )
 
     def test_train_with_validation_no_propensities(self, model_object, training_data):
@@ -199,7 +200,7 @@ class TestModelTrainingRun:
             training_data,
             use_validation=True,
             drop_columns=["propensity"],
-            expected_values=[0.10495479, 0.18830131, 0.10495479]
+            expected_values=[0.129937, 0.170063, 0.129937]
         )
 
     def test_train_without_validation_no_propensities(self, model_object, training_data):
@@ -208,5 +209,5 @@ class TestModelTrainingRun:
             training_data,
             use_validation=False,
             drop_columns=["propensity"],
-            expected_values=[0.101092, 0.200001, 0.298907]
+            expected_values=[0.159874, 0.2, 0.240126]
         )
