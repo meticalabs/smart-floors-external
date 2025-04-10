@@ -79,27 +79,36 @@ class TestImpressionCount:
 
     def test_map_batches(self, ray_cluster, sample_dataset):
         trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
-        result = trainer.value_replacer_based_on_impressions(sample_dataset,
-                                                             columns=["category", "adUnitId", "device", "not_present",
-                                                                      "NoneCol"],
-                                                             min_impressions=2, default_category="other")
+        result = trainer.value_replacer_based_on_impressions(
+            sample_dataset,
+            columns=["category", "adUnitId", "device", "not_present", "NoneCol"],
+            min_impressions=2,
+            default_category="other"
+        )
         transformed_ds = sample_dataset.map_batches(result.transform, batch_format="pandas")
         transformed_data = transformed_ds.to_pandas()
-        assert all(col in transformed_data.columns for col in ["category", "adUnitId", "device"])
+
+        # Validate columns
+        expected_columns = ["category", "adUnitId", "device", "NoneCol"]
+        assert all(col in transformed_data.columns for col in expected_columns)
         assert "not_present" not in transformed_data.columns
-        pd.testing.assert_frame_equal(
-            transformed_data[["category", "adUnitId", "device", "NoneCol"]].sort_values(
-                by=["category", "adUnitId", "device", "NoneCol"]),
-            pd.DataFrame({
-                "category": ["A", "B", "A", "C", "B", "A", "C", "C", "other", "other"],
-                "adUnitId": ["a", "b", "a", "a", "a", "b", "a", "a", "other", "a"],
-                "device": ["iPhone"] * 9 + ["other"],
-                "NoneCol": [None] * 10
-            }).sort_values(by=["category", "adUnitId", "device", "NoneCol"]),
-            check_dtype=False,
-            check_exact=False,
-            check_like=True,
-        )
+
+        # Validate row count
+        expected_data = pd.DataFrame({
+            "category": ["A", "B", "A", "C", "B", "A", "C", "C", "other", "other"],
+            "adUnitId": ["a", "b", "a", "a", "a", "b", "a", "a", "other", "a"],
+            "device": ["iPhone"] * 9 + ["other"],
+            "NoneCol": [None] * 10
+        })
+        assert len(transformed_data) == len(expected_data)
+
+        # Sort both DataFrames
+        transformed_data = transformed_data[expected_columns].sort_values(by=expected_columns).reset_index(drop=True)
+        expected_data = expected_data.sort_values(by=expected_columns).reset_index(drop=True)
+
+        # Validate each column
+        for col in expected_columns:
+            pd.testing.assert_series_equal(transformed_data[col], expected_data[col], check_dtype=False)
 
 
 class TestFeatures:
