@@ -78,10 +78,9 @@ runs:
         python --version
         cp dist/*.whl sagemaker-inference/
         cd sagemaker-inference/
-        wheel_file_name=$(ls *.whl)
-        proj_wheel_file=$(echo "${{steps.project.outputs.project_name}}-${{steps.project.outputs.project_version}}-py3-none-any.whl")
-        echo "app_wheel_file_name=$wheel_file_name" >> $GITHUB_ENV
-        echo "app_wheel_file_path=$(pwd)/$wheel_file_name" >> $GITHUB_ENV
+        app_wheel_file_name=$(ls *.whl)
+        echo "app_wheel_file_name=$app_wheel_file_name" >> $GITHUB_ENV
+        echo "app_wheel_file_path=$(pwd)/$app_wheel_file_name" >> $GITHUB_ENV
         
         echo "Deploying Docker image to AWS ECR"
         AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
