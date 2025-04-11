@@ -185,6 +185,10 @@ def extract_events(spark: SparkSession, logger: logging.Logger, args: [str]):
 
 def run(spark: SparkSession, args: [str]):
     try:
+        # TODO:
+        # 1. Filter empty context or null
+        # 2. Filter empty ad revenue or null or -1
+        # 3. Explode bid floor values to high and medium
         logger = spark_log4j_logger(spark, __name__)
         _log_start(logger=logger, args=args)
         extract_events(spark=spark, logger=logger, args=args)

@@ -6,19 +6,20 @@ import pytest
 import ray
 from ray.train.xgboost import RayTrainReportCallback
 
-from bid_optim_etl_py.applovin_train_runner import ModelTrainer  # Replace with the actual import path
+from bid_optim_etl_py.applovin_train_runner import ModelTrainer, ValueReplacer
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session", autouse=True)
 def ray_cluster():
-    ray.init()
+    ray.init(num_cpus=4)
     yield
     ray.shutdown()
 
 
 @pytest.fixture
 def model_object():
-    return ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
+    return ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now(),
+                        num_boost_round=10)
 
 
 class TestImpressionCount:
@@ -56,28 +57,58 @@ class TestImpressionCount:
         }
         assert result.default_value == "default"
 
+    @pytest.mark.parametrize("value_replacer, input_data, expected_output", [
+        (ValueReplacer(valid_values={"category": ["A", "B"]},
+                       default_value="other"), {"category": "A"}, {"category": "A"}),
+        (ValueReplacer(valid_values={"category": ["A"]},
+                       default_value="other"), {"category": "B"}, {"category": "other"}),
+        (ValueReplacer(valid_values={"category": ["A", "B"]},
+                       default_value="other"), {"category": None}, {"category": None}),
+        (ValueReplacer(valid_values={"category": ["A", "B"]},
+                       default_value="other"), {"category": "C"}, {"category": "other"}),
+        (ValueReplacer(valid_values={"category": ["A", "B"], "device": ["iPhone"]},
+                       default_value="other"), {"category": "A", "device": "iPhone"},
+         {"category": "A", "device": "iPhone"}),
+        (ValueReplacer(valid_values={"category": ["A", "B"], "device": ["iPhone"]},
+                       default_value="other"), {"category": "C", "device": "iPhone"},
+         {"category": "other", "device": "iPhone"}),
+    ])
+    def test_value_replacer_transform(self, value_replacer, input_data, expected_output):
+        output = value_replacer.transform_series(pd.Series(input_data))
+        assert output.to_dict() == expected_output
+
     def test_map_batches(self, ray_cluster, sample_dataset):
         trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
-        result = trainer.value_replacer_based_on_impressions(sample_dataset,
-                                                             columns=["category", "adUnitId", "device", "not_present",
-                                                                      "NoneCol"],
-                                                             min_impressions=2, default_category="other")
+        result = trainer.value_replacer_based_on_impressions(
+            sample_dataset,
+            columns=["category", "adUnitId", "device", "not_present", "NoneCol"],
+            min_impressions=2,
+            default_category="other"
+        )
         transformed_ds = sample_dataset.map_batches(result.transform, batch_format="pandas")
         transformed_data = transformed_ds.to_pandas()
-        assert all(col in transformed_data.columns for col in ["category", "adUnitId", "device"])
+
+        # Validate columns
+        expected_columns = ["category", "adUnitId", "device", "NoneCol"]
+        assert all(col in transformed_data.columns for col in expected_columns)
         assert "not_present" not in transformed_data.columns
-        pd.testing.assert_frame_equal(
-            transformed_data[["category", "adUnitId", "device", "NoneCol"]].sort_values(by=["category", "adUnitId"]),
-            pd.DataFrame({
-                "category": ["A", "B", "A", "C", "B", "A", "C", "C", "other", "other"],
-                "adUnitId": ["a", "b", "a", "a", "a", "b", "a", "a", "other", "a"],
-                "device": ["iPhone"] * 9 + ["other"],
-                "NoneCol": [None] * 10
-            }).sort_values(by=["category", "adUnitId"]),
-            check_dtype=False,
-            check_exact=False,
-            check_like=True,
-        )
+
+        # Validate row count
+        expected_data = pd.DataFrame({
+            "category": ["A", "B", "A", "C", "B", "A", "C", "C", "other", "other"],
+            "adUnitId": ["a", "b", "a", "a", "a", "b", "a", "a", "other", "a"],
+            "device": ["iPhone"] * 9 + ["other"],
+            "NoneCol": [None] * 10
+        })
+        assert len(transformed_data) == len(expected_data)
+
+        # Sort both DataFrames
+        transformed_data = transformed_data[expected_columns].sort_values(by=expected_columns).reset_index(drop=True)
+        expected_data = expected_data.sort_values(by=expected_columns).reset_index(drop=True)
+
+        # Validate each column
+        for col in expected_columns:
+            pd.testing.assert_series_equal(transformed_data[col], expected_data[col], check_dtype=False)
 
 
 class TestFeatures:
@@ -122,7 +153,7 @@ class TestModelTrainingRun:
             "highestBidFloorValue": [1.0, 0.2, 0.5],
             "mediumBidFloorValue": [0.5, 0.2, 0.3],
             "totalAmount": [0.1, 0.2, 0.3],
-            "propensities": [0.1, 0.2, 0.3],
+            "propensity": [0.1, 0.2, 0.3],
         }))
 
     def generic_model_training_test(self, model_object, training_data, use_validation, drop_columns=None,
@@ -162,7 +193,7 @@ class TestModelTrainingRun:
             model_object,
             training_data,
             use_validation=False,
-            expected_values=[0.100221, 0.199911, 0.299453]
+            expected_values=[0.124535, 0.184767, 0.238754]
         )
 
     def test_train_with_validation(self, model_object, training_data):
@@ -170,7 +201,7 @@ class TestModelTrainingRun:
             model_object,
             training_data,
             use_validation=True,
-            expected_values=[0.10495479, 0.18830131, 0.10495479]
+            expected_values=[0.129937, 0.170063, 0.129937]
         )
 
     def test_train_with_validation_no_propensities(self, model_object, training_data):
@@ -178,8 +209,8 @@ class TestModelTrainingRun:
             model_object,
             training_data,
             use_validation=True,
-            drop_columns=["propensities"],
-            expected_values=[0.10495479, 0.18830131, 0.10495479]
+            drop_columns=["propensity"],
+            expected_values=[0.129937, 0.170063, 0.129937]
         )
 
     def test_train_without_validation_no_propensities(self, model_object, training_data):
@@ -187,6 +218,6 @@ class TestModelTrainingRun:
             model_object,
             training_data,
             use_validation=False,
-            drop_columns=["propensities"],
-            expected_values=[0.101092, 0.200001, 0.298907]
+            drop_columns=["propensity"],
+            expected_values=[0.159874, 0.2, 0.240126]
         )
