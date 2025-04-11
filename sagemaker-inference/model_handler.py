@@ -58,7 +58,7 @@ class ContextualBanditModelHandler(object):
         output = []
         for context_data in preprocessed_request:
             model = self.fetch_model(context_data["model_id"])
-            bid_floor_response = model.predict(context_data["context_vector_series"], context_data["ad_units"])
+            bid_floor_response = model.predict(context_data["context_series"], context_data["ad_units"])
             bid_floor_response.update(
                 {
                     "userId": context_data["user_id"],
