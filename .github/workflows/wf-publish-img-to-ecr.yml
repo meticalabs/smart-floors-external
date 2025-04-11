@@ -1,4 +1,4 @@
-name: Publish SageMaker Beagle Docker
+name: Publish SageMaker Docker
 
 on:
   workflow_dispatch:
