@@ -36,7 +36,7 @@ ARG APP_WHEEL_FILE
 
 COPY $APP_WHEEL_FILE /home/$APP_WHEEL_FILE
 
-RUN pip install /home/APP_WHEEL_FILE
+RUN pip install /home/$APP_WHEEL_FILE
 
 # Copy entrypoint script to the image
 COPY dockerd-entrypoint.py /usr/local/bin/dockerd-entrypoint.py
