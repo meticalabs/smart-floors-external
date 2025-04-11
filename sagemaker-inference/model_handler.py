@@ -43,11 +43,6 @@ class ContextualBanditModelHandler(object):
                     input_context_vectors.append(self.preprocess_single_request(body))
         return input_context_vectors, is_batch
 
-    def fetch_featuriser(self, experiment_id):
-        if experiment_id not in self.featurisers:
-            raise ValueError(f"Experiment {experiment_id} not found in featurisers")
-        return self.featurisers[experiment_id]
-
     def fetch_model(self, model_id):
         if model_id not in self.models:
             raise ValueError(f"Model ID {model_id} not found in contextual models")

@@ -136,7 +136,7 @@ def test_adds_hardcoded_context_values():
     context = pd.Series({"user.country": "US"})
     bid_floor_adunit = [{"bidFloor": 5.0}, {"bidFloor": 3.0}]
     result = predictor.add_hardcoded_contexts(context, bid_floor_adunit)
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(datetime.timezone.utc)
     pd.testing.assert_series_equal(result, pd.Series({
         "user.country": "US",
         "assignmentDayOfWeek": now.weekday(),
@@ -151,7 +151,7 @@ def test_handles_empty_context_series():
     result = predictor.add_hardcoded_contexts(pd.Series({}), [
         {"bidFloor": 5.0}, {"bidFloor": 3.0},
     ])
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(datetime.timezone.utc)
     pd.testing.assert_series_equal(result, pd.Series({
         "assignmentDayOfWeek": now.weekday(),
         "assignmentHourOfDay": now.hour,

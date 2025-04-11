@@ -464,9 +464,10 @@ class Predictor:
         """
         Adds hardcoded context values to the provided context series.
         :param context: The context series to be modified.
+        :param bid_floor_adunit: List of bid floor ad units to extract values from.
         :return: The modified context series with hardcoded values added.
         """
-        nw = datetime.datetime.now()
+        nw = datetime.datetime.now(datetime.timezone.utc)
         context["assignmentDayOfWeek"] = nw.weekday()
         context["assignmentHourOfDay"] = nw.hour
         context["highestBidFloorValue"] = bid_floor_adunit[0]["bidFloor"]
@@ -504,27 +505,31 @@ class Predictor:
 
     def predict(self, context: pd.Series, floors: list[dict]):
         floors_to_predict, lowest_bid_floor = self.split_based_on_name(floors)
-        ad_unit_combinations = list(map(lambda x: list(x), list(itertools.combinations(floors_to_predict, 2))))
+        ad_unit_combinations = [
+            self.sort_by_name_postfix_desc(list(pair))
+            for pair in itertools.combinations(floors_to_predict, 2)
+        ]
 
         # If the model is not trained or if the random number is less than epsilon, return a random assignment
         if self.clf is None or self.rng.uniform() < self.epsilon:
-            assignments = self.rng.choice(ad_unit_combinations, size=1, replace=False)
+            assignments = self.rng.choice(ad_unit_combinations, size=1)
             propensity = self.epsilon
-            sorted_assignment = self.sort_by_name_postfix_desc(assignments[0])
-            return self.form_response(sorted_assignment, lowest_bid_floor, propensity)
+            return self.form_response(list(assignments[0]), lowest_bid_floor, propensity)
 
-        predictions = []
+        transformed = []
         for ad_unit_list in ad_unit_combinations:
-            bid_floor_adunit = self.sort_by_name_postfix_desc(ad_unit_list)
-            with_hardcoded_context = self.add_hardcoded_contexts(context, bid_floor_adunit)
-            feature_dmatrix = self.features.fields_to_dmatrix_from_series(
-                self.value_replacer.transform_series(with_hardcoded_context),
-                prediction_phase=True)
-            pred = self.clf.predict(feature_dmatrix)
-            predictions.append({
-                "adUnit": bid_floor_adunit,
-                "predictedBidFloor": pred[0],
-            })
+            with_hardcoded_context = self.add_hardcoded_contexts(context, ad_unit_list)
+            transformed.append(with_hardcoded_context.to_dict())
+
+        feature_dmatrix = self.features.fields_to_dmatrix_from_df(pd.DataFrame(transformed), prediction_phase=True)
+        predictions_array = self.clf.predict(feature_dmatrix)
+        predictions = [
+            {
+                "adUnit": ad_unit_list,
+                "predictedBidFloor": float(pred),
+            }
+            for ad_unit_list, pred in zip(ad_unit_combinations, predictions_array)
+        ]
         best_bid_floor_combo = min(predictions, key=lambda x: x["predictedBidFloor"])
         propensity = (1 - self.epsilon)
         return self.form_response(best_bid_floor_combo["adUnit"], lowest_bid_floor, propensity)
