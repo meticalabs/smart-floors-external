@@ -30,7 +30,7 @@ ruff:  ## Run linters
 
 .PHONY: cov
 cov: ## Run tests with coverage
-	uv run pytest --cov=src --cov-report=term-missing
+	uv run pytest --cov=bid_optim_etl_py --cov-report=xml --cov-report=html --cov-report=term-missing
 
 .PHONY: doc
 doc:  ## Build documentation
@@ -54,4 +54,4 @@ clean:
 	rm -f uv.lock
 
 .PHONY: all
-all:  clean lock install ruff test build
+all:  clean lock install ruff cov build

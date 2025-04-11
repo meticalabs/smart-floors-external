@@ -76,6 +76,8 @@ runs:
         --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
         --output text))
         python --version
+        cp dist/*.whl sagemaker-inference/
+        cd sagemaker-inference/
         wheel_file_name=$(ls *.whl)
         proj_wheel_file=$(echo "${{steps.project.outputs.project_name}}-${{steps.project.outputs.project_version}}-py3-none-any.whl")
         echo "app_wheel_file_name=$wheel_file_name" >> $GITHUB_ENV
