@@ -45,7 +45,7 @@ runs:
     - name: Make All
       uses: meticalabs/gh_workflows/.github/actions/poetry-conda-install@main
       with:
-        github_token: ${{ secrets.CI_GITHUB_TOKEN }}
+        github_token: ${{ inputs.github_token }}
         python_version: ${{ inputs.python_version }}
         branch: ${{ env.BRANCH_NAME }}
         run_make_all: true
@@ -63,7 +63,7 @@ runs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.GH_OPENID_ROLE_ARN }}
+        role-to-assume: ${{ inputs.gh_openid_role_arn }}
         aws-region: ${{ inputs.aws_region }}
 
     - name: Building tar from venv and publishing to s3
