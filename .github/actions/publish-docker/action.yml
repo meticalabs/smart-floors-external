@@ -95,8 +95,8 @@ runs:
         echo "Creating ECR Repository $ECR_REGISTRY/${{inputs.ecr_repo}} if not exists with image tag mutable"
         aws ecr describe-repositories --repository-names ${{inputs.ecr_repo}} || aws ecr create-repository --repository-name ${{inputs.ecr_repo}} --image-tag-mutability MUTABLE
         
-        echo "docker build -t $ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG --build-arg APP_WHEEL_FILE=app_wheel_file_name ${{ inputs.arm == 'true' && '--platform linux/arm64' || '' }} ."
-        docker build -t $ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG --build-arg APP_WHEEL_FILE=app_wheel_file_name ${{ inputs.arm == 'true' && '--platform linux/arm64' || '' }}.
+        echo "docker build -t $ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG --build-arg APP_WHEEL_FILE=$app_wheel_file_name ${{ inputs.arm == 'true' && '--platform linux/arm64' || '' }} ."
+        docker build -t $ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG --build-arg APP_WHEEL_FILE=$app_wheel_file_name ${{ inputs.arm == 'true' && '--platform linux/arm64' || '' }}.
         docker push $ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG
         echo "image=$ECR_REGISTRY/${{inputs.ecr_repo}}:$IMAGE_TAG"
         
