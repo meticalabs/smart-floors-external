@@ -53,5 +53,9 @@ clean:
 	rm -fr .pytest_cache
 	rm -f uv.lock
 
+.PHONY: format
+format:
+	uv run black .
+
 .PHONY: all
 all:  clean lock install ruff cov build

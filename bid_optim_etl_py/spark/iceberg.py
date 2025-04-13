@@ -15,8 +15,11 @@ class TableConfig:
     table_name: str
 
     def db_table_name(self, catalog_name: str = None) -> str:
-        return (f"{catalog_name}.{self.database_name}.{self.table_name}"
-                if catalog_name else f"{self.database_name}.{self.table_name}")
+        return (
+            f"{catalog_name}.{self.database_name}.{self.table_name}"
+            if catalog_name
+            else f"{self.database_name}.{self.table_name}"
+        )
 
 
 @dataclass(kw_only=True)
@@ -37,7 +40,7 @@ class Maintenance:
     def rewrite_data_files(self, db_table_name: str, where_clause: str = None):
         self._log.info(f"Rewriting data files for table {db_table_name}")
         args = {"table": db_table_name, "where": where_clause}
-        args_str = ", ".join([f"{k}=>\"{v}\"" for k, v in args.items() if v])
+        args_str = ", ".join([f'{k}=>"{v}"' for k, v in args.items() if v])
         df = self.spark.sql(f"CALL {self.iceberg_catalog}.system.rewrite_data_files({args_str})")
         df.show(truncate=False)
         self._log.info(f"Data files rewritten for table {db_table_name}")
@@ -49,7 +52,8 @@ class Maintenance:
         df = self.spark.sql(
             f"CALL {self.iceberg_catalog}.system.expire_snapshots(table => '{db_table_name}', "
             f"older_than => TIMESTAMP '{expire_older_than.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}', "
-            f"stream_results => true)")
+            f"stream_results => true)"
+        )
         df.show(truncate=False)
         self._log.info(f"Snapshots expired for table {db_table_name}")
 
@@ -70,8 +74,9 @@ class IcebergIO:
         log4jLogger = self.spark.sparkContext._jvm.org.apache.log4j
         self._log = log4jLogger.LogManager.getLogger(__name__)
 
-    def configure_spark_writer(self, df: DataFrame, db_table_name: str,
-                               options: dict[str, str] = None) -> DataFrameWriterV2:
+    def configure_spark_writer(
+        self, df: DataFrame, db_table_name: str, options: dict[str, str] = None
+    ) -> DataFrameWriterV2:
         df_writer = (
             df.writeTo(db_table_name)
             .tableProperty("write.spark.fanout.enabled", "true")
@@ -85,14 +90,16 @@ class IcebergIO:
 
         return df_writer
 
-    def create_iceberg_table_if_not_exists(self, df: DataFrame, table_config: TableConfig, partition_by: [str] = None,
-                                           table_properties: dict = None):
+    def create_iceberg_table_if_not_exists(
+        self, df: DataFrame, table_config: TableConfig, partition_by: [str] = None, table_properties: dict = None
+    ):
         db_table_name = table_config.db_table_name(self.iceberg_catalog)
         warehouse_location = self.spark.conf.get(f"spark.sql.catalog.{self.iceberg_catalog}.warehouse")
         if not warehouse_location:
             raise ValueError(
                 f"Table location not found for catalog {self.iceberg_catalog}. "
-                f"Please check the config `spark.sql.catalog.{self.iceberg_catalog}.warehouse` in spark submit.")
+                f"Please check the config `spark.sql.catalog.{self.iceberg_catalog}.warehouse` in spark submit."
+            )
 
         table_location = f"{warehouse_location.rstrip('/')}/{table_config.database_name}/{table_config.table_name}"
 
@@ -105,29 +112,35 @@ class IcebergIO:
                 df_writer = df_writer.partitionedBy(*[df[col] for col in partition_by])
             df_writer.create()
             table_property_alter = ",".join([f"'{k}'='{v}'" for k, v in table_properties.items()])
-            self.spark.sql(
-                f"ALTER TABLE {db_table_name} SET TBLPROPERTIES ({table_property_alter})").show()
+            self.spark.sql(f"ALTER TABLE {db_table_name} SET TBLPROPERTIES ({table_property_alter})").show()
             self._log.info(f"Table {db_table_name} created at location {table_location} successfully")
         else:
             self._log.info(f"Table {db_table_name} already exists")
 
-    def write(self, spark_df: DataFrame, table_config: TableConfig, partition_by: [str] = None,
-              create_database: bool = False, overwrite_partitions: bool = True,
-              write_options: dict = None):
+    def write(
+        self,
+        spark_df: DataFrame,
+        table_config: TableConfig,
+        partition_by: [str] = None,
+        create_database: bool = False,
+        overwrite_partitions: bool = True,
+        write_options: dict = None,
+    ):
         if create_database:
-            self.create_glue_database_if_not_exists(name=table_config.database_name, region_name=self.region_name, )
+            self.create_glue_database_if_not_exists(
+                name=table_config.database_name,
+                region_name=self.region_name,
+            )
 
         sink_table_name_with_catalog = table_config.db_table_name(self.iceberg_catalog)
-        self.create_iceberg_table_if_not_exists(df=spark_df,
-                                                table_config=table_config,
-                                                partition_by=partition_by)
+        self.create_iceberg_table_if_not_exists(df=spark_df, table_config=table_config, partition_by=partition_by)
 
         if spark_df.isEmpty():
             self._log.info(f"Dataframe is empty. Skipping write to {sink_table_name_with_catalog}")
         else:
-            spark_writer = self.configure_spark_writer(df=spark_df,
-                                                       db_table_name=sink_table_name_with_catalog,
-                                                       options=write_options)
+            spark_writer = self.configure_spark_writer(
+                df=spark_df, db_table_name=sink_table_name_with_catalog, options=write_options
+            )
             if partition_by:
                 spark_writer = spark_writer.partitionedBy(*[spark_df[col] for col in partition_by])
             if overwrite_partitions:
