@@ -26,7 +26,7 @@ test:  ## Run tests
 
 .PHONY: ruff
 ruff:  ## Run linters
-	uv run ruff check ./tests
+	uv run ruff check .
 
 .PHONY: cov
 cov: ## Run tests with coverage
