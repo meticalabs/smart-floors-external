@@ -31,11 +31,16 @@ class ValueReplacer:
         return series
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        df.update({
-            column: [None] * len(df) if column not in df.columns else df[column].apply(
-                lambda x: x if x is None or x in valid_vals else self.default_value)
-            for column, valid_vals in self.valid_values.items()
-        })
+        df.update(
+            {
+                column: (
+                    [None] * len(df)
+                    if column not in df.columns
+                    else df[column].apply(lambda x: x if x is None or x in valid_vals else self.default_value)
+                )
+                for column, valid_vals in self.valid_values.items()
+            }
+        )
         return df
 
 
@@ -85,8 +90,9 @@ class Features:
         return dmatrix
 
     def assemble_fields_from_series(self, series: pd.Series, prediction_phase: bool = False) -> pd.DataFrame:
-        return self.assemble_fields_from_df(pd.DataFrame([series] if series is not None and len(series) != 0 else {}),
-                                            prediction_phase)
+        return self.assemble_fields_from_df(
+            pd.DataFrame([series] if series is not None and len(series) != 0 else {}), prediction_phase
+        )
 
     def assemble_fields_from_df(self, df: pd.DataFrame, prediction_phase: bool = False) -> pd.DataFrame:
         if df is None:
@@ -132,24 +138,26 @@ class ModelTrainer:
     num_boost_round: int = 100
 
     def __post_init__(self):
-        self.features = Features([
-            Field(name="user.country", dtype="category"),
-            Field(name="user.languageCode", dtype="category"),
-            Field(name="user.deviceType", dtype="category"),
-            Field(name="user.osVersion", dtype="category"),
-            Field(name="user.deviceModel", dtype="category"),
-            Field(name="assignmentDayOfWeek", dtype="Int64"),
-            Field(name="assignmentHourOfDay", dtype="Int64"),
-            Field(name="user.minRevenueLast24Hours", dtype="float32"),
-            Field(name="user.avgRevenueLast24Hours", dtype="float32"),
-            Field(name="user.avgRevenueLast48Hours", dtype="float32"),
-            Field(name="user.avgRevenueLast72Hours", dtype="float32"),
-            Field(name="user.mostRecentAdSource", dtype="category"),
-            Field(name="user.mostRecentAdRevenue", dtype="float32"),
-            Field(name="highestBidFloorValue", dtype="float32"),
-            Field(name="mediumBidFloorValue", dtype="float32"),
-            Field(name="totalAmount", dtype="float32", target_column=True, feature_column=False)
-        ])
+        self.features = Features(
+            [
+                Field(name="user.country", dtype="category"),
+                Field(name="user.languageCode", dtype="category"),
+                Field(name="user.deviceType", dtype="category"),
+                Field(name="user.osVersion", dtype="category"),
+                Field(name="user.deviceModel", dtype="category"),
+                Field(name="assignmentDayOfWeek", dtype="Int64"),
+                Field(name="assignmentHourOfDay", dtype="Int64"),
+                Field(name="user.minRevenueLast24Hours", dtype="float32"),
+                Field(name="user.avgRevenueLast24Hours", dtype="float32"),
+                Field(name="user.avgRevenueLast48Hours", dtype="float32"),
+                Field(name="user.avgRevenueLast72Hours", dtype="float32"),
+                Field(name="user.mostRecentAdSource", dtype="category"),
+                Field(name="user.mostRecentAdRevenue", dtype="float32"),
+                Field(name="highestBidFloorValue", dtype="float32"),
+                Field(name="mediumBidFloorValue", dtype="float32"),
+                Field(name="totalAmount", dtype="float32", target_column=True, feature_column=False),
+            ]
+        )
 
         self.weight_column = "propensity"
 
@@ -171,9 +179,12 @@ class ModelTrainer:
         test_dataset = valid_dataset.drop_columns([target_column])
         return train_dataset, valid_dataset, test_dataset
 
-    def preprocess_data(self, train_dataset: ray.data.Dataset, valid_dataset: Optional[ray.data.Dataset] = None,
-                        test_dataset: Optional[ray.data.Dataset] = None) -> Tuple[
-        ray.data.Dataset, ray.data.Dataset, ray.data.Dataset]:
+    def preprocess_data(
+        self,
+        train_dataset: ray.data.Dataset,
+        valid_dataset: Optional[ray.data.Dataset] = None,
+        test_dataset: Optional[ray.data.Dataset] = None,
+    ) -> Tuple[ray.data.Dataset, ray.data.Dataset, ray.data.Dataset]:
         """Preprocess the dataset by applying feature engineering and transformations."""
         return (
             self.features.assemble_fields_from_ds(train_dataset),
@@ -188,9 +199,13 @@ class ModelTrainer:
         booster = RayTrainReportCallback.get_model(checkpoint)
         booster.save_model(model_save_path)
 
-    def value_replacer_based_on_impressions(self, dataset: ray.data.Dataset, columns: list[str],
-                                            min_impressions: int = 10000,
-                                            default_category: str = "other") -> ValueReplacer:
+    def value_replacer_based_on_impressions(
+        self,
+        dataset: ray.data.Dataset,
+        columns: list[str],
+        min_impressions: int = 10000,
+        default_category: str = "other",
+    ) -> ValueReplacer:
         """
         Replaces values in specified columns of a dataset based on the minimum number of
         impressions, ensuring that only frequently occurring values in the dataset are
@@ -219,18 +234,19 @@ class ModelTrainer:
         for col in columns:
             if col not in dataset.columns():
                 continue
-            ds = dataset.filter(lambda x: x[col] is not None).groupby(col).count().rename_columns(
-                {"count()": "count"}).filter(
-                lambda x: x["count"] >= min_impressions)
+            ds = (
+                dataset.filter(lambda x: x[col] is not None)
+                .groupby(col)
+                .count()
+                .rename_columns({"count()": "count"})
+                .filter(lambda x: x["count"] >= min_impressions)
+            )
             if ds.count() == 0:
                 continue
             values_with_min_impressions = ds.select_columns([col]).to_pandas()[col].tolist()
             features_with_min_impressions[col] = sorted(list(set(values_with_min_impressions)))
 
-        return ValueReplacer(
-            valid_values=features_with_min_impressions,
-            default_value=default_category
-        )
+        return ValueReplacer(valid_values=features_with_min_impressions, default_value=default_category)
 
     def _train_fn_per_worker(self, config: dict):
         """
@@ -267,13 +283,17 @@ class ModelTrainer:
         # Extract target and features
         target_column = config["target_column"]
         train_X, train_y = train_df.drop(columns=[target_column]), train_df[target_column]
-        eval_X, eval_y = (eval_df.drop(columns=[target_column]), eval_df[target_column]) if not eval_df.empty else (
-            None, None)
+        eval_X, eval_y = (
+            (eval_df.drop(columns=[target_column]), eval_df[target_column]) if not eval_df.empty else (None, None)
+        )
 
         # Create DMatrix for XGBoost
         dtrain = xgboost.DMatrix(train_X, label=train_y, enable_categorical=True, weight=train_weights_df)
-        deval = xgboost.DMatrix(eval_X, label=eval_y, enable_categorical=True,
-                                weight=eval_weights_df) if eval_X is not None else None
+        deval = (
+            xgboost.DMatrix(eval_X, label=eval_y, enable_categorical=True, weight=eval_weights_df)
+            if eval_X is not None
+            else None
+        )
 
         # Training parameters
         params = {
@@ -281,7 +301,7 @@ class ModelTrainer:
             "objective": "reg:squarederror",
             "learning_rate": 0.1,
             "max_depth": 4,
-            "eval_metric": ["rmse", "mae"]
+            "eval_metric": ["rmse", "mae"],
         }
 
         # Train the model
@@ -301,12 +321,16 @@ class ModelTrainer:
         is_train_data_empty = train_dataset is None or train_dataset.limit(1).count() == 0
         is_valid_data_empty = valid_dataset is None or valid_dataset.limit(1).count() == 0
 
-        train_weights = train_dataset.select_columns([
-            self.weight_column]) if not is_train_data_empty and self.weight_column in train_dataset.columns() \
+        train_weights = (
+            train_dataset.select_columns([self.weight_column])
+            if not is_train_data_empty and self.weight_column in train_dataset.columns()
             else ray.data.from_items([])
-        valid_weights = (valid_dataset.select_columns([
-            self.weight_column]) if not is_valid_data_empty and self.weight_column in valid_dataset.columns()
-                         else ray.data.from_items([]))
+        )
+        valid_weights = (
+            valid_dataset.select_columns([self.weight_column])
+            if not is_valid_data_empty and self.weight_column in valid_dataset.columns()
+            else ray.data.from_items([])
+        )
 
         # Perform 1 / self.weight_column to get the inverse of the weights
         def inverse_propensity(df: pd.DataFrame) -> pd.DataFrame:
@@ -333,8 +357,9 @@ class ModelTrainer:
         num_workers = max(1, num_workers)  # Ensure at least 1 worker
         return num_workers
 
-    def run(self, assignments_with_ad_revenue: ray.data.Dataset, target_column: str,
-            *, use_validation_set: bool = False) -> Tuple[Result, ValueReplacer, Features]:
+    def run(
+        self, assignments_with_ad_revenue: ray.data.Dataset, target_column: str, *, use_validation_set: bool = False
+    ) -> Tuple[Result, ValueReplacer, Features]:
         """
         Executes the process of training an XGBoost model on the given dataset with
         options for cross-validation and preprocessing. The function handles data
@@ -365,15 +390,18 @@ class ModelTrainer:
             assignments_with_ad_revenue,
             columns=[f.name for f in self.features.fields_sorted() if f.dtype == "category"],
             min_impressions=10000,
-            default_category="other"
+            default_category="other",
         )
 
         # Transform the dataset
         transformed_ds = assignments_with_ad_revenue.map_batches(value_replacer.transform, batch_format="pandas")
 
         # Split the dataset
-        train_dataset, valid_dataset, _ = self.prepare_data(transformed_ds, target_column) if use_validation_set else (
-            transformed_ds, ray.data.from_items([]), None)
+        train_dataset, valid_dataset, _ = (
+            self.prepare_data(transformed_ds, target_column)
+            if use_validation_set
+            else (transformed_ds, ray.data.from_items([]), None)
+        )
 
         # Get the propensities for each record
         train_weights, valid_weights = self.get_weights(train_dataset, valid_dataset)
@@ -410,28 +438,34 @@ class ModelTrainer:
 
 def arg_parser():
     import argparse
-    parser = argparse.ArgumentParser(description='Run the applovin bid floor training')
-    parser.add_argument('--customerId', type=int, help='Customer ID')
-    parser.add_argument('--appId', type=int, help='App ID')
-    parser.add_argument('--modelId', type=str, help='Model ID')
+
+    parser = argparse.ArgumentParser(description="Run the applovin bid floor training")
+    parser.add_argument("--customerId", type=int, help="Customer ID")
+    parser.add_argument("--appId", type=int, help="App ID")
+    parser.add_argument("--modelId", type=str, help="Model ID")
     parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
-    parser.add_argument('--icebergTrainDataTable', help='Iceberg db table name for training data')
-    parser.add_argument('--s3ModelArtifactBucket', help='S3 bucket name for model artifact')
+    parser.add_argument("--icebergTrainDataTable", help="Iceberg db table name for training data")
+    parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
     return parser.parse_args()
 
 
-def read_training_data(iceberg_train_data: str, customer_id: int, app_id: int, model_id: str, date: datetime.date,
-                       num_blocks: Optional[int] = None) -> ray.data.Dataset:
+def read_training_data(
+    iceberg_train_data: str,
+    customer_id: int,
+    app_id: int,
+    model_id: str,
+    date: datetime.date,
+    num_blocks: Optional[int] = None,
+) -> ray.data.Dataset:
     try:
         catalog = load_catalog(name="default", type="glue")
         table = catalog.load_table(iceberg_train_data)
-        table_data = (
-            table.scan(row_filter=EqualTo(Schema.CUSTOMER_ID, customer_id) &
-                                  EqualTo(Schema.APP_ID, app_id) &
-                                  EqualTo(Schema.MODEL_ID, model_id) &
-                                  LessThanOrEqual(Schema.ASSIGNMENT_DATE, date.strftime("%Y-%m-%d"))
-                       ).to_ray()
-        )
+        table_data = table.scan(
+            row_filter=EqualTo(Schema.CUSTOMER_ID, customer_id)
+            & EqualTo(Schema.APP_ID, app_id)
+            & EqualTo(Schema.MODEL_ID, model_id)
+            & LessThanOrEqual(Schema.ASSIGNMENT_DATE, date.strftime("%Y-%m-%d"))
+        ).to_ray()
         if num_blocks:
             return table_data.repartition(num_blocks)
     except Exception:
@@ -468,7 +502,7 @@ class Predictor:
         :return: The modified context series with hardcoded values added.
         """
         nw = datetime.datetime.now(datetime.timezone.utc)
-        context["assignmentDayOfWeek"] = nw.weekday()
+        context["assignmentDayOfWeek"] = nw.weekday()  # 0-6, Monday-Sunday
         context["assignmentHourOfDay"] = nw.hour
         context["highestBidFloorValue"] = bid_floor_adunit[0]["bidFloor"]
         context["mediumBidFloorValue"] = bid_floor_adunit[1]["bidFloor"]
@@ -506,8 +540,7 @@ class Predictor:
     def predict(self, context: pd.Series, floors: list[dict]):
         floors_to_predict, lowest_bid_floor = self.split_based_on_name(floors)
         ad_unit_combinations = [
-            self.sort_by_name_postfix_desc(list(pair))
-            for pair in itertools.combinations(floors_to_predict, 2)
+            self.sort_by_name_postfix_desc(list(pair)) for pair in itertools.combinations(floors_to_predict, 2)
         ]
 
         # If the model is not trained or if the random number is less than epsilon, return a random assignment
@@ -531,7 +564,7 @@ class Predictor:
             for ad_unit_list, pred in zip(ad_unit_combinations, predictions_array)
         ]
         best_bid_floor_combo = min(predictions, key=lambda x: x["predictedBidFloor"])
-        propensity = (1 - self.epsilon)
+        propensity = 1 - self.epsilon
         return self.form_response(best_bid_floor_combo["adUnit"], lowest_bid_floor, propensity)
 
 
@@ -572,8 +605,9 @@ def save_predictor_model_to_s3(predictor: Predictor, app_id: str, model_artifact
 def run():
     args = arg_parser()
     init_ray_cluster()
-    training_data = read_training_data(args.icebergTrainDataTable, args.customerId, args.appId, args.modelId,
-                                       datetime.date.fromisoformat(args.date))
+    training_data = read_training_data(
+        args.icebergTrainDataTable, args.customerId, args.appId, args.modelId, datetime.date.fromisoformat(args.date)
+    )
 
     result, value_replacer, features = None, None, None
 
@@ -581,25 +615,27 @@ def run():
         logging.warning("Training data is empty, hence skipping model training")
         trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
         result, value_replacer, features = trainer.run(
-            assignments_with_ad_revenue=training_data,
-            target_column=Schema.TOTAL_AMOUNT,
-            use_validation_set=True
+            assignments_with_ad_revenue=training_data, target_column=Schema.TOTAL_AMOUNT, use_validation_set=True
         )
 
     predictor = Predictor(
         epsilon=0.1,
         clf=RayTrainReportCallback.get_model(result.checkpoint) if result.checkpoint else None,
         value_replacer=value_replacer,
-        features=features
+        features=features,
     )
 
-    save_predictor_model_to_s3(predictor, args.appId, S3ModelArtifactInfo(
-        bucket=args.s3ModelArtifactBucket,
-        key=f"bid_floor_models/{args.date}/{args.customerId}/{args.appId}/",
-        file_name=f"{args.modelId}.joblib",
-        file_name_wo_ext=args.modelId
-    ))
+    save_predictor_model_to_s3(
+        predictor,
+        args.appId,
+        S3ModelArtifactInfo(
+            bucket=args.s3ModelArtifactBucket,
+            key=f"bid_floor_models/{args.date}/{args.customerId}/{args.appId}/",
+            file_name=f"{args.modelId}.joblib",
+            file_name_wo_ext=args.modelId,
+        ),
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run()
