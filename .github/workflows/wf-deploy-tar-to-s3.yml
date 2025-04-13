@@ -106,5 +106,7 @@ jobs:
           echo $aws_sts
           echo "Publishing JAR $env_tar to $s3_env_target"
           aws s3 cp $env_tar $s3_env_target
+          echo "Publishing the .tar.gz from dist for ray cluster bootstrap"
+          aws s3 cp ./dist/$env_tar s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/pyspark/bootstrap/
           
 
