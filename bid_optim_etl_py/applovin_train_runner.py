@@ -502,7 +502,7 @@ class Predictor:
         :return: The modified context series with hardcoded values added.
         """
         nw = datetime.datetime.now(datetime.timezone.utc)
-        context["assignmentDayOfWeek"] = nw.weekday()
+        context["assignmentDayOfWeek"] = nw.weekday()  # 0-6, Monday-Sunday
         context["assignmentHourOfDay"] = nw.hour
         context["highestBidFloorValue"] = bid_floor_adunit[0]["bidFloor"]
         context["mediumBidFloorValue"] = bid_floor_adunit[1]["bidFloor"]

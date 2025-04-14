@@ -26,7 +26,7 @@ test:  ## Run tests
 
 .PHONY: ruff
 ruff:  ## Run linters
-	uv run ruff check ./tests
+	uv run ruff check .
 
 .PHONY: cov
 cov: ## Run tests with coverage
@@ -52,6 +52,10 @@ clean:
 	rm -fr htmlcov/
 	rm -fr .pytest_cache
 	rm -f uv.lock
+
+.PHONY: format
+format:
+	uv run black .
 
 .PHONY: all
 all:  clean lock install ruff cov build

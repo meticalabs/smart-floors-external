@@ -6,7 +6,6 @@ import pandas as pd
 
 
 class ContextualBanditModelHandler(object):
-
     def __init__(self):
         self.initialized = False
         self.models = None
@@ -27,7 +26,7 @@ class ContextualBanditModelHandler(object):
             "model_id": model_id,
             "user_id": body["userId"],
             "context_series": context_series,
-            "ad_units": body["adUnits"]
+            "ad_units": body["adUnits"],
         }
 
     def preprocess(self, request):
