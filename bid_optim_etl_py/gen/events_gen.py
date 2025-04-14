@@ -39,7 +39,6 @@ bid_schema = StructType(
         StructField("userId", StringType(), False),
         StructField("cpmFloorAdUnitId", StringType(), False),
         StructField("isFilled", BooleanType(), False),
-        StructField("cpmFloorValue", FloatType(), False),
         StructField("winningBidValue", FloatType(), True),
         StructField("eventTime", StringType(), False),
     ]
@@ -95,12 +94,12 @@ class EventNames:
     APPLOVIN_BID_FLOOR = "applovin_bid_floor"
     ESTIMATED_AD_REVENUE = "estimated_ad_revenue"
 
+ad_units = ["ad_unit_1", "ad_unit_2", "ad_unit_3", "ad_unit_4", "ad_unit_5"]
 
 def generate_random_data(
     customer_id, app_id, num_records, event_type, request_id_user_time_map, full_set=False, bid_only=False
 ):
     data = []
-    ad_units = ["ad_unit_1", "ad_unit_2", "ad_unit_3", "ad_unit_4", "ad_unit_5"]
     ad_formats = ["INTER", "BANNER", "REWARDED"]
     ad_sources = ["Applovin", "Google Ads", "Unity Ads"]
 
@@ -114,7 +113,7 @@ def generate_random_data(
             event_time = request_id_user_time_map[request_id]["assignmentTime"]
             context = generate_random_context()
             inference_data = json.dumps({"endpoint": "sagemaker"})
-            cpm_floor_ad_unit_ids = sorted(random.sample(ad_units, 3), reverse=True)
+            cpm_floor_ad_unit_ids = request_id_user_time_map[request_id]["adUnits"]
             cpm_floor_values = sorted([round(random.uniform(0.0, 5.0), 2) for _ in cpm_floor_ad_unit_ids], reverse=True)
             record = (
                 request_id,
@@ -136,7 +135,7 @@ def generate_random_data(
 
         elif event_type.lower() == EventNames.APPLOVIN_BID_FLOOR.lower() and (full_set or bid_only):
             event_time = request_id_user_time_map[request_id]["bidTime"]
-            cpm_floor_ad_unit_id = random.choice(ad_units)
+            cpm_floor_ad_unit_id = request_id_user_time_map[request_id]["adUnitId"]
             is_filled = random.choice([True, False])
             cpm_floor_value = round(random.uniform(0.0, 5.0), 2)
             winning_bid_value = round(random.uniform(cpm_floor_value, cpm_floor_value + 2.0), 2) if is_filled else None
@@ -150,7 +149,6 @@ def generate_random_data(
                 user_id,
                 cpm_floor_ad_unit_id,
                 is_filled,
-                cpm_floor_value,
                 winning_bid_value,
                 event_time,
             )
@@ -158,7 +156,7 @@ def generate_random_data(
 
         elif event_type.lower() == EventNames.ESTIMATED_AD_REVENUE.lower() and full_set:
             event_time = request_id_user_time_map[request_id]["revenueTime"]
-            cpm_floor_ad_unit_id = random.choice(ad_units)
+            cpm_floor_ad_unit_id = request_id_user_time_map[request_id]["adUnitId"]
             record = (
                 request_id,
                 placement_tag,
@@ -229,11 +227,15 @@ def run(spark: SparkSession, args: [str]):
                 (base_time + timedelta(minutes=random.randint(1, 60 * 32))).isoformat() if i < full_set_count else None
             )
 
+            rnd_units = sorted(random.sample(ad_units, 3), reverse=True)
+
             request_id_user_time_map[req_id] = {
                 "userId": user_id,
                 "assignmentTime": assignment_time,
                 "bidTime": bid_time,
                 "revenueTime": revenue_time,
+                "adUnits": rnd_units,
+                "adUnitId": random.choice(rnd_units),
             }
 
         request_ids_full = all_request_ids[:full_set_count]
