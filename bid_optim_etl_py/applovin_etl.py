@@ -160,17 +160,13 @@ class Events:
         )
 
     def fetch_revenue_events(self):
-        return (
-            self.read_events_parquet("estimated_ad_revenue", self.ad_revenue_columns)
-            .filter((col(Schema.DATE) <= self.date_iso) & self.valid_revenue_rows())
-            .drop(Schema.DATE)
+        return self.read_events_parquet("estimated_ad_revenue", self.ad_revenue_columns).filter(
+            (col(Schema.DATE) <= self.date_iso) & self.valid_revenue_rows()
         )
 
     def fetch_bid_sequence_events(self):
-        return (
-            self.read_events_parquet("applovin_bid_floor", self.bid_sequence_columns)
-            .filter(col(Schema.IS_FILLED) & (col(Schema.DATE) <= self.date_iso))
-            .drop(Schema.DATE)
+        return self.read_events_parquet("applovin_bid_floor", self.bid_sequence_columns).filter(
+            col(Schema.IS_FILLED) & (col(Schema.DATE) <= self.date_iso)
         )
 
     def join_all(self, assignment_data: DataFrame, bid_sequence_data: DataFrame, ad_revenue_data: DataFrame):
