@@ -163,6 +163,7 @@ class ModelTrainer:
         self.weight_column = "propensity"
 
     def _run_config(self, storage_path: Optional[str] = None) -> RunConfig:
+        batch_time = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d_%H%M%S")
         return RunConfig(
             name=f"applovin_train_{self.app_id}_{self.model_id}",
             checkpoint_config=CheckpointConfig(
@@ -171,7 +172,7 @@ class ModelTrainer:
                 # Only keep the latest checkpoint and delete the others.
                 num_to_keep=1,
             ),
-            storage_path=storage_path or f"~/ray_results_{self.customer_id}_{self.app_id}_{self.model_id}",
+            storage_path=storage_path or f"~/ray_results_{self.customer_id}_{self.app_id}_{self.model_id}_{batch_time}",
         )
 
     def prepare_data(self, input_data: ray.data.Dataset, target_column: str) -> Tuple[Dataset, Dataset, Dataset]:
@@ -610,7 +611,10 @@ def save_predictor_model_to_s3(predictor: Predictor, app_id: str, model_artifact
     logging.info(f"Saving model to S3: {model_artifact_path.bucket}/{model_artifact_path.key}")
 
     # Save the model locally
-    local_model_base_path = os.path.join("/tmp", app_id)
+    local_model_base_path = os.path.join("/tmp", str(app_id))
+
+    if not os.path.exists(local_model_base_path):
+        os.makedirs(local_model_base_path)
 
     joblib.dump(predictor, os.path.join(local_model_base_path, model_artifact_path.file_name))
 
@@ -634,7 +638,7 @@ def run():
             app_id=args.appId,
             model_id=args.modelId,
             date=datetime.datetime.fromisoformat(args.date),
-            s3_checkpoint_path=f"s3://{args.s3ModelArtifactBucket}/bid_floor_models/{args.date}/{args.customerId}/{args.appId}/",
+            s3_checkpoint_path=f"s3://{args.s3ModelArtifactBucket}/bod_floor_checkpoints/{args.date}/{args.customerId}/{args.appId}/",
         )
         result, value_replacer, features = trainer.run(
             assignments_with_ad_revenue=training_data, target_column=Schema.TOTAL_AMOUNT, use_validation_set=True
@@ -647,14 +651,17 @@ def run():
         features=features,
     )
 
+    predictor_file_name = f"{args.customerId}_{args.appId}_{args.modelId}"
+    predictor_final_name_with_ext = f"{args.customerId}_{args.appId}_{args.modelId}.joblib"
+
     save_predictor_model_to_s3(
         predictor,
         args.appId,
         S3ModelArtifactInfo(
             bucket=args.s3ModelArtifactBucket,
-            key=f"bid_floor_models/{args.date}/{args.customerId}/{args.appId}/",
-            file_name=f"{args.modelId}.joblib",
-            file_name_wo_ext=args.modelId,
+            key=f"bid_floor_models/{args.date}/{predictor_final_name_with_ext}",
+            file_name=predictor_final_name_with_ext,
+            file_name_wo_ext=predictor_file_name,
         ),
     )
 
