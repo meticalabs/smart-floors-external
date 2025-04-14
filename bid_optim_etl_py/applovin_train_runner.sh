@@ -9,6 +9,8 @@ APP_ID=$3
 MODEL_ID=$4
 ICEBERG_TRAIN_TABLE=$5
 ENV_TAR_FILE=$6
+S3_MODEL_ARTIFACT_BUCKET=$7
+DATE=$8
 
 # -----------------------------------------------------------------------------
 # Activate the conda environment
@@ -30,5 +32,5 @@ pip install -U /tmp/env.tar.gz
 # -----------------------------------------------------------------------------
 echo "Running the Ray job"
 aws s3 cp "${PYTHON_RUNNER}" /tmp/runner.py
-python3 /tmp/runner.py --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}"
+python3 /tmp/runner.py --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}"
 
