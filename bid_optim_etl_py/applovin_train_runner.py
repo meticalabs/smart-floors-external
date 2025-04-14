@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Tuple, Optional
 
 import boto3
+import joblib
 import numpy as np
 import pandas as pd
 import ray
@@ -57,7 +58,7 @@ class Schema:
     IS_FILLED: str = "isFilled"
     CPM_FLOOR_AD_UNIT_ID: str = "cpmFloorAdUnitId"
     CPM_FLOOR_VALUE: str = "cpmFloorValue"
-    ASSIGNMENT_DATE = "assignmentDate"
+    DATE = "date"
     LAST_UPDATE_TIME = "lastUpdateTime"
     CUSTOMER_ID = "customerId"
     APP_ID = "appId"
@@ -357,6 +358,13 @@ class ModelTrainer:
         num_workers = max(1, num_workers)  # Ensure at least 1 worker
         return num_workers
 
+    def update_array_fields_to_list(self, batch: dict) -> dict:
+        # This function converts numpy arrays to lists for specific fields in the batch
+        # as arrow conversion fails for numpy arrays with dtype=object
+        if "cpmFloorAdUnitIds" in batch:
+            batch["cpmFloorAdUnitIds"] = np.array([arr.tolist() for arr in batch["cpmFloorAdUnitIds"]], dtype=object)
+        return batch
+
     def run(
         self, assignments_with_ad_revenue: ray.data.Dataset, target_column: str, *, use_validation_set: bool = False
     ) -> Tuple[Result, ValueReplacer, Features]:
@@ -464,7 +472,7 @@ def read_training_data(
             row_filter=EqualTo(Schema.CUSTOMER_ID, customer_id)
             & EqualTo(Schema.APP_ID, app_id)
             & EqualTo(Schema.MODEL_ID, model_id)
-            & LessThanOrEqual(Schema.ASSIGNMENT_DATE, date.strftime("%Y-%m-%d"))
+            & LessThanOrEqual(Schema.DATE, date.strftime("%Y-%m-%d"))
         ).to_ray()
         if num_blocks:
             return table_data.repartition(num_blocks)
@@ -569,7 +577,7 @@ class Predictor:
 
         if self.rng.uniform() < self.epsilon:
             assignments = self.rng.choice(ad_unit_combinations, size=1)
-            if best_bid_floor_combo['adUnit'] != assignments[0]:
+            if best_bid_floor_combo["adUnit"] != assignments[0]:
                 propensity = self.epsilon / len(ad_unit_combinations)
 
             return self.form_response(list(assignments[0]), lowest_bid_floor, propensity)
@@ -598,7 +606,6 @@ def save_predictor_model_to_s3(predictor: Predictor, app_id: str, model_artifact
     """
     Save the predictor model to S3.
     """
-    import joblib
 
     logging.info(f"Saving model to S3: {model_artifact_path.bucket}/{model_artifact_path.key}")
 
@@ -616,13 +623,19 @@ def run():
     init_ray_cluster()
     training_data = read_training_data(
         args.icebergTrainDataTable, args.customerId, args.appId, args.modelId, datetime.date.fromisoformat(args.date)
-    )
+    ).drop_columns(["cpmFloorAdUnitIds"])
 
     result, value_replacer, features = None, None, None
 
     if training_data.limit(1).count() != 0:
         logging.warning("Training data is empty, hence skipping model training")
-        trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
+        trainer = ModelTrainer(
+            customer_id=args.customerId,
+            app_id=args.appId,
+            model_id=args.modelId,
+            date=datetime.datetime.fromisoformat(args.date),
+            s3_checkpoint_path=f"s3://{args.s3ModelArtifactBucket}/bid_floor_models/{args.date}/{args.customerId}/{args.appId}/",
+        )
         result, value_replacer, features = trainer.run(
             assignments_with_ad_revenue=training_data, target_column=Schema.TOTAL_AMOUNT, use_validation_set=True
         )
