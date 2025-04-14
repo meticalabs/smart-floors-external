@@ -60,7 +60,7 @@ extend-exclude = '''
 
 [tool.coverage.run]
 branch = true
-omit = [".*", "*/site-packages/*", "tests/*"]
+omit = [".*", "*/site-packages/*", "tests/*", "*/gen/*"]
 
 [tool.coverage.paths]
 source = [
