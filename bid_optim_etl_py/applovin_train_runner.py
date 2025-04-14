@@ -544,9 +544,10 @@ class Predictor:
         ]
 
         # If the model is not trained or if the random number is less than epsilon, return a random assignment
-        if self.clf is None or self.rng.uniform() < self.epsilon:
+        if self.clf is None:
             assignments = self.rng.choice(ad_unit_combinations, size=1)
-            propensity = self.epsilon
+            propensity = self.epsilon / len(ad_unit_combinations)
+
             return self.form_response(list(assignments[0]), lowest_bid_floor, propensity)
 
         transformed = []
@@ -563,8 +564,16 @@ class Predictor:
             }
             for ad_unit_list, pred in zip(ad_unit_combinations, predictions_array)
         ]
-        best_bid_floor_combo = min(predictions, key=lambda x: x["predictedBidFloor"])
-        propensity = 1 - self.epsilon
+        best_bid_floor_combo = max(predictions, key=lambda x: x["predictedBidFloor"])
+        propensity = (1 - self.epsilon) + self.epsilon / len(ad_unit_combinations)
+
+        if self.rng.uniform() < self.epsilon:
+            assignments = self.rng.choice(ad_unit_combinations, size=1)
+            if best_bid_floor_combo['adUnit'] != assignments[0]:
+                propensity = self.epsilon / len(ad_unit_combinations)
+
+            return self.form_response(list(assignments[0]), lowest_bid_floor, propensity)
+
         return self.form_response(best_bid_floor_combo["adUnit"], lowest_bid_floor, propensity)
 
 

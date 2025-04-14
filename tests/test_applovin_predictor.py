@@ -5,6 +5,21 @@ import pytest
 from bid_optim_etl_py.applovin_train_runner import Predictor, Features, Field, ValueReplacer
 
 
+floors = [
+    {"name": "metica_ad_unit_4", "id": "4", "bidFloor": 4.0},
+    {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
+    {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0},
+    {"name": "metica_ad_unit_1", "id": "1", "bidFloor": 1.0},
+]
+
+features = Features(fields=[
+    Field(name="user.country", dtype="category"),
+    Field(name="assignmentDayOfWeek", dtype="Int64"),
+    Field(name="assignmentHourOfDay", dtype="Int64"),
+    Field(name="highestBidFloorValue", dtype="float32"),
+    Field(name="mediumBidFloorValue", dtype="float32"),
+])
+
 @pytest.fixture
 def mock_xgboost_model():
     mock_model = Mock()
@@ -200,3 +215,69 @@ def test_handles_empty_assignments_and_missing_lowest_bid_floor():
     predictor = Predictor(epsilon=0.5)
     with pytest.raises(Exception):
         predictor.form_response([], {}, 0.3)
+
+def test_predict_model_present_random_not_triggered():
+    mock_rng = Mock()
+    mock_rng.uniform.return_value = 0.2  # >= 0.1, no random choice
+    mock_model = Mock()
+    mock_model.predict.return_value = [10.0, 8.0, 9.0]  # Best: [4,3]
+    predictor = Predictor(
+        epsilon=0.1,
+        rng=mock_rng,
+        clf=mock_model,
+        features=features,
+        value_replacer=None
+    )
+    context = pd.Series({"user.country": "US"})
+    result = predictor.predict(context, floors)
+    expected_response = {
+        "cpmFloorAdUnitIds": ["4", "3", "1"],
+        "cpmFloorValues": [4.0, 3.0, 1.0],
+        "propensity": pytest.approx(0.9333, abs=1e-4),
+    }
+    assert result == expected_response
+
+def test_predict_model_present_random_triggered_not_best():
+    mock_rng = Mock()
+    mock_rng.uniform.return_value = 0.05  # < 0.1, triggers random choice
+    mock_rng.choice.return_value = [[floors[0], floors[2]]]  # Chooses [4,2]
+    mock_model = Mock()
+    mock_model.predict.return_value = [10.0, 8.0, 9.0]  # Best: [4,3]
+    predictor = Predictor(
+        epsilon=0.1,
+        rng=mock_rng,
+        clf=mock_model,
+        features=features,
+        value_replacer=None
+    )
+    context = pd.Series({"user.country": "US"})
+    result = predictor.predict(context, floors)
+    expected_response = {
+        "cpmFloorAdUnitIds": ["4", "2", "1"],
+        "cpmFloorValues": [4.0, 2.0, 1.0],
+        "propensity": pytest.approx(0.0333, abs=1e-4),
+    }
+    assert result == expected_response
+
+
+def test_predict_model_present_random_triggered_is_best():
+    mock_rng = Mock()
+    mock_rng.uniform.return_value = 0.05  # < 0.1, triggers	random choice
+    mock_rng.choice.return_value = [[floors[0], floors[1]]]  # Chooses [4,3]
+    mock_model = Mock()
+    mock_model.predict.return_value = [10.0, 8.0, 9.0]  # Best: [4,3]
+    predictor = Predictor(
+        epsilon=0.1,
+        rng=mock_rng,
+        clf=mock_model,
+        features=features,
+        value_replacer=None
+    )
+    context = pd.Series({"user.country": "US"})
+    result = predictor.predict(context, floors)
+    expected_response = {
+        "cpmFloorAdUnitIds": ["4", "3", "1"],
+        "cpmFloorValues": [4.0, 3.0, 1.0],
+        "propensity": pytest.approx(0.9333, abs=1e-4),
+    }
+    assert result == expected_response
