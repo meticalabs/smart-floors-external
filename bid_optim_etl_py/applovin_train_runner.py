@@ -569,7 +569,7 @@ class Predictor:
 
         if self.rng.uniform() < self.epsilon:
             assignments = self.rng.choice(ad_unit_combinations, size=1)
-            if best_bid_floor_combo == assignments[0]:
+            if best_bid_floor_combo['adUnit'] == assignments[0]:
                 propensity = (1 - self.epsilon) + self.epsilon / len(ad_unit_combinations)
             else:
                 propensity = self.epsilon / len(ad_unit_combinations)
