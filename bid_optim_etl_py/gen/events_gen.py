@@ -239,24 +239,33 @@ def run(spark: SparkSession, args: [str]):
         request_id_user_map_assignment_only = {k: request_id_user_time_map[k] for k in request_ids_assignment_only}
 
         assignment_data_full = generate_random_data(
-            customer_id, app_id, full_set_count, "meticaBidFloorAssignment", request_id_user_map_full, full_set=True
+            customer_id, app_id, full_set_count, "metica_bid_floor_assignment", request_id_user_map_full, full_set=True
         )
         bid_data_full = generate_random_data(
-            customer_id, app_id, full_set_count, "applovinBidFloor", request_id_user_map_full, full_set=True
+            customer_id, app_id, full_set_count, "applovin_bid_floor", request_id_user_map_full, full_set=True
         )
         revenue_data_full = generate_random_data(
-            customer_id, app_id, full_set_count, "estimatedAdRevenue", request_id_user_map_full, full_set=True
+            customer_id, app_id, full_set_count, "estimated_ad_revenue", request_id_user_map_full, full_set=True
         )
 
         assignment_data_bid_only = generate_random_data(
-            customer_id, app_id, bid_only_count, "meticaBidFloorAssignment", request_id_user_map_bid_only, bid_only=True
+            customer_id,
+            app_id,
+            bid_only_count,
+            "metica_bid_floor_assignment",
+            request_id_user_map_bid_only,
+            bid_only=True,
         )
         bid_data_bid_only = generate_random_data(
-            customer_id, app_id, bid_only_count, "applovinBidFloor", request_id_user_map_bid_only, bid_only=True
+            customer_id, app_id, bid_only_count, "applovin_bid_floor", request_id_user_map_bid_only, bid_only=True
         )
 
         assignment_data_assignment_only = generate_random_data(
-            customer_id, app_id, assignment_only_count, "meticaBidFloorAssignment", request_id_user_map_assignment_only
+            customer_id,
+            app_id,
+            assignment_only_count,
+            "metica_bid_floor_assignment",
+            request_id_user_map_assignment_only,
         )
 
         assignment_df = spark.createDataFrame(
@@ -268,19 +277,19 @@ def run(spark: SparkSession, args: [str]):
         assignment_df.withColumns(
             {"date": col("eventTime").cast("date"), "hour": hour(col("eventTime").cast("timestamp"))}
         ).write.partitionBy("date", "hour").mode("overwrite").format("parquet").save(
-            f"{s3_base_path}/customerId={customer_id}/appId={app_id}/meticaBidFloorAssignment/"
+            f"{s3_base_path}/customerId={customer_id}/appId={app_id}/metica_bid_floor_assignment/"
         )
 
         bid_df.withColumns(
             {"date": col("eventTime").cast("date"), "hour": hour(col("eventTime").cast("timestamp"))}
         ).write.partitionBy("date", "hour").mode("overwrite").format("parquet").save(
-            f"{s3_base_path}/customerId={customer_id}/appId={app_id}/applovinBidFloor/"
+            f"{s3_base_path}/customerId={customer_id}/appId={app_id}/applovin_bid_floor/"
         )
 
         revenue_df.withColumns(
             {"date": col("eventTime").cast("date"), "hour": hour(col("eventTime").cast("timestamp"))}
         ).write.partitionBy("date", "hour").mode("overwrite").format("parquet").save(
-            f"{s3_base_path}/customerId={customer_id}/appId={app_id}/estimatedAdRevenue/"
+            f"{s3_base_path}/customerId={customer_id}/appId={app_id}/estimated_ad_revenue/"
         )
 
     except Exception as exp:

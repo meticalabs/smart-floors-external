@@ -154,7 +154,7 @@ class Events:
 
     def fetch_assignment_events(self):
         return self.add_hardcoded_contexts(
-            self.read_events_parquet("metica_user_assignment").filter(
+            self.read_events_parquet("metica_bid_floor_assignment").filter(
                 (col(Schema.DATE) <= self.date_iso) & self.valid_context_values() & self.has_valid_bid_floor_values()
             )
         )
