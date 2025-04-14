@@ -100,7 +100,6 @@ class Events:
             Schema.USER_ID,
             Schema.IS_FILLED,
             Schema.CPM_FLOOR_AD_UNIT_ID,
-            Schema.CPM_FLOOR_VALUE,
             Schema.DATE,
         ]
 
