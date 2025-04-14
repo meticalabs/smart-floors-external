@@ -27,7 +27,7 @@ class ValueReplacer:
 
     def transform_series(self, series: pd.Series) -> pd.Series:
         for column, valid_vals in self.valid_values.items():
-            if column not in series.index or (series[column] is not None and series[column] not in valid_vals):
+            if column not in series.index or (series[column] not in valid_vals):
                 series[column] = self.default_value
         return series
 
@@ -37,7 +37,7 @@ class ValueReplacer:
                 column: (
                     [None] * len(df)
                     if column not in df.columns
-                    else df[column].apply(lambda x: x if x is None or x in valid_vals else self.default_value)
+                    else df[column].apply(lambda x: self.default_value if x not in valid_vals else x)
                 )
                 for column, valid_vals in self.valid_values.items()
             }
@@ -237,8 +237,7 @@ class ModelTrainer:
             if col not in dataset.columns():
                 continue
             ds = (
-                dataset.filter(lambda x: x[col] is not None)
-                .groupby(col)
+                dataset.groupby(col)
                 .count()
                 .rename_columns({"count()": "count"})
                 .filter(lambda x: x["count"] >= min_impressions)

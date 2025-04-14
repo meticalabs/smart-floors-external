@@ -63,6 +63,8 @@ class TestImpressionCount:
         (ValueReplacer(valid_values={"category": ["A"]},
                        default_value="other"), {"category": "B"}, {"category": "other"}),
         (ValueReplacer(valid_values={"category": ["A", "B"]},
+                       default_value="other"), {"category": None}, {"category": "other"}),
+        (ValueReplacer(valid_values={"category": ["A", "B", None]},
                        default_value="other"), {"category": None}, {"category": None}),
         (ValueReplacer(valid_values={"category": ["A", "B"]},
                        default_value="other"), {"category": "C"}, {"category": "other"}),
