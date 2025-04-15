@@ -345,7 +345,7 @@ class ModelTrainer:
 
         return train_weights, valid_weights
 
-    def dynamic_num_workers(self, train_dataset: ray.data.Dataset, min_rows_per_worker: int = 1000) -> int:
+    def dynamic_num_workers(self, train_dataset: ray.data.Dataset, min_rows_per_worker: int = 10_000_000) -> int:
         """
         Dynamically calculates the number of workers based on the number of rows in the dataset
         :param train_dataset: The training dataset
@@ -415,7 +415,7 @@ class ModelTrainer:
         train_weights, valid_weights = self.get_weights(train_dataset, valid_dataset)
 
         # Dynamic worker calculation
-        num_workers = self.dynamic_num_workers(train_dataset, min_rows_per_worker=1000)
+        num_workers = self.dynamic_num_workers(train_dataset, min_rows_per_worker=10_000_000)
 
         logging.info(f"Number of workers: {num_workers}")
 
