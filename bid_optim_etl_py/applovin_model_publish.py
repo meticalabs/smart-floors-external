@@ -155,15 +155,15 @@ def publish_model_artifact(customer_id, app_id, model_ids: [str], date, s3_model
 
 
 def publish_artifacts(args: [str]):
-    args = arg_parser(args)
+    parsed_args_obj = arg_parser(args)
 
     publish_model_artifact(
-        customer_id=args.customerId,
-        app_id=args.appId,
-        model_ids=args.modelIds,
-        date=args.date,
-        s3_model_artifact_bucket=args.s3ModelArtifactBucket,
-        bid_floor_version=args.bidFloorVersion,
+        customer_id=parsed_args_obj.customerId,
+        app_id=parsed_args_obj.appId,
+        model_ids=parsed_args_obj.modelIds,
+        date=parsed_args_obj.date,
+        s3_model_artifact_bucket=parsed_args_obj.s3ModelArtifactBucket,
+        bid_floor_version=parsed_args_obj.bidFloorVersion,
     )
 
 
