@@ -154,8 +154,8 @@ def publish_model_artifact(customer_id, app_id, model_ids: [str], date, s3_model
     )
 
 
-def publish_artifacts():
-    args = arg_parser()
+def publish_artifacts(args: [str]):
+    args = arg_parser(args)
 
     publish_model_artifact(
         customer_id=args.customerId,
@@ -171,7 +171,7 @@ def run(spark: SparkSession, args: [str]):
     try:
         logger = spark_log4j_logger(spark, __name__)
         _log_start(logger=logger, args=args)
-        publish_artifacts()
+        publish_artifacts(args=args)
         _log_complete(logger=logger, args=args)
     except Exception as exp:
         logging.exception("Error while running Applovin ETL publish job")
