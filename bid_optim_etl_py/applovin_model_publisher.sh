@@ -31,6 +31,6 @@ pip install -U /tmp/publisher_env.tar.gz
 # Run the Publisher job
 # -----------------------------------------------------------------------------
 echo "Running the Publisher job"
-aws s3 cp "${PYTHON_RUNNER}" /tmp/runner.py
-python3 /tmp/runner.py --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelIds "${MODEL_IDS//,/ }" --bidFloorVersion "${BID_FLOOR_VERSION}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}"
+aws s3 cp "${PYTHON_RUNNER}" /tmp/publisher_runner.py
+python3 /tmp/publisher_runner.py --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelIds "${MODEL_IDS//,/ }" --bidFloorVersion "${BID_FLOOR_VERSION}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}"
 

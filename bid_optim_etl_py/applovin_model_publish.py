@@ -116,6 +116,12 @@ def publish_model_artifact(customer_id, app_id, model_ids: [str], date, s3_model
 
     local_staging_folder = os.path.join("/tmp", f"bid_floor_model_{customer_id}_{app_id}")
 
+    if os.path.exists(local_staging_folder):
+        logging.info(f"Deleting existing staging folder {local_staging_folder}")
+        os.rmdir(local_staging_folder)
+
+    os.makedirs(local_staging_folder, exist_ok=True)
+
     joblib.dump(sagemaker_tar_content, os.path.join(local_staging_folder, "predictor.joblib"))
 
     local_tar_gz_artifact_name = f"bid_cb_{app_id}_{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}"
