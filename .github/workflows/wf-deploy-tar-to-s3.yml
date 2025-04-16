@@ -111,5 +111,7 @@ jobs:
           echo "Publishing the ray .py and .sh files to s3"
           aws s3 cp ./bid_optim_etl_py/applovin_train_runner.py s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
           aws s3 cp ./bid_optim_etl_py/applovin_train_runner.sh s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
+          aws s3 cp ./bid_optim_etl_py/applovin_model_publish.py s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
+          aws s3 cp ./bid_optim_etl_py/applovin_model_publisher.sh s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
           
 
