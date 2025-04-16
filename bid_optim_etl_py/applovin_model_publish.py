@@ -28,7 +28,7 @@ def _log_complete(logger: logging.Logger, args: [str]):
     logger.info(f"Completed publishing Applovin ETL artifacts with args: {args}")
 
 
-def arg_parser():
+def arg_parser(args: [str]):
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the applovin bid floor training")
@@ -38,7 +38,7 @@ def arg_parser():
     parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
     parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
     parser.add_argument("--bidFloorVersion", help="Bid floor version")
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
 @dataclass
