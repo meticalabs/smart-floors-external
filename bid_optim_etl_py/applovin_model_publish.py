@@ -28,7 +28,7 @@ def _log_complete(logger: logging.Logger, args: [str]):
     logger.info(f"Completed publishing Applovin ETL artifacts with args: {args}")
 
 
-def arg_parser():
+def arg_parser(args: [str]):
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the applovin bid floor training")
@@ -38,7 +38,7 @@ def arg_parser():
     parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
     parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
     parser.add_argument("--bidFloorVersion", help="Bid floor version")
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
 @dataclass
@@ -154,8 +154,8 @@ def publish_model_artifact(customer_id, app_id, model_ids: [str], date, s3_model
     )
 
 
-def publish_artifacts():
-    args = arg_parser()
+def publish_artifacts(args: [str]):
+    args = arg_parser(args)
 
     publish_model_artifact(
         customer_id=args.customerId,
@@ -171,7 +171,7 @@ def run(spark: SparkSession, args: [str]):
     try:
         logger = spark_log4j_logger(spark, __name__)
         _log_start(logger=logger, args=args)
-        publish_artifacts()
+        publish_artifacts(args=args)
         _log_complete(logger=logger, args=args)
     except Exception as exp:
         logging.exception("Error while running Applovin ETL publish job")
