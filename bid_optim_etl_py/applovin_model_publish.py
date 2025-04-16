@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 import boto3
 import joblib
-from pyspark.sql import SparkSession
 
 from bid_optim_etl_py.applovin_train_runner import Predictor, ValueReplacer, Features, Field  # noqa
 
@@ -15,22 +14,7 @@ class ApplovinETLException(Exception):
     pass
 
 
-def spark_log4j_logger(spark_session: SparkSession, logger_name: str):
-    log4jLogger = spark_session.sparkContext._jvm.org.apache.log4j
-    logger = log4jLogger.LogManager.getLogger(logger_name)
-    logger.setLevel(log4jLogger.Level.DEBUG)
-    return logger
-
-
-def _log_start(logger: logging.Logger, args: [str]):
-    logger.info(f"Started publishing Applovin ETL artifacts with args: {args}")
-
-
-def _log_complete(logger: logging.Logger, args: [str]):
-    logger.info(f"Completed publishing Applovin ETL artifacts with args: {args}")
-
-
-def arg_parser(args: [str]):
+def arg_parser():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the applovin bid floor training")
@@ -40,7 +24,7 @@ def arg_parser(args: [str]):
     parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
     parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
     parser.add_argument("--bidFloorVersion", help="Bid floor version")
-    return parser.parse_args(args)
+    return parser.parse_args()
 
 
 @dataclass
@@ -156,8 +140,8 @@ def publish_model_artifact(customer_id, app_id, model_ids: [str], date, s3_model
     )
 
 
-def publish_artifacts(args: [str]):
-    parsed_args_obj = arg_parser(args)
+def publish_artifacts():
+    parsed_args_obj = arg_parser()
 
     publish_model_artifact(
         customer_id=parsed_args_obj.customerId,
@@ -169,12 +153,12 @@ def publish_artifacts(args: [str]):
     )
 
 
-def run(spark: SparkSession, args: [str]):
+if __name__ == "__main__":
     try:
-        logger = spark_log4j_logger(spark, __name__)
-        _log_start(logger=logger, args=args)
-        publish_artifacts(args=args)
-        _log_complete(logger=logger, args=args)
+        logging.basicConfig(level=logging.INFO)
+        logging.info("Starting Applovin ETL publish job")
+        publish_artifacts()
+        logging.info("Completed Applovin ETL publish job")
     except Exception as exp:
         logging.exception("Error while running Applovin ETL publish job")
         raise exp
