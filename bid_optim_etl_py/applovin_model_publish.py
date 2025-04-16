@@ -70,7 +70,7 @@ def file_exists_in_s3(boto3_client, bucket: str, key: str) -> bool:
 
 def download_model_artifact_from_s3(
     customer_id, app_id, model_id, model_artifact_path: S3ModelArtifactInfo, postfix="", error_if_empty=True
-) -> Predictor:
+):
     local_model_file_path = f"/tmp/{customer_id}_{app_id}_{model_id}_{model_artifact_path.file_name}{postfix}"
     boto3_client = boto3.client("s3")
     if file_exists_in_s3(boto3_client, model_artifact_path.bucket, model_artifact_path.key):
