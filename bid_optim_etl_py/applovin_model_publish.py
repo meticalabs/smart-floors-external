@@ -8,7 +8,7 @@ import boto3
 import joblib
 from pyspark.sql import SparkSession
 
-from bid_optim_etl_py.applovin_train_runner import Predictor
+from bid_optim_etl_py.applovin_train_runner import Predictor, ValueReplacer, Features, Field  # noqa
 
 
 class ApplovinETLException(Exception):
