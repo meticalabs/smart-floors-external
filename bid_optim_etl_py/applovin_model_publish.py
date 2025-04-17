@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import shutil
 import tarfile
 from dataclasses import dataclass
 
@@ -118,7 +119,7 @@ def publish_model_artifact(customer_id, app_id, model_ids: [str], date, s3_model
 
     if os.path.exists(local_staging_folder):
         logging.info(f"Deleting existing staging folder {local_staging_folder}")
-        os.rmdir(local_staging_folder)
+        shutil.rmtree(local_staging_folder)
 
     os.makedirs(local_staging_folder, exist_ok=True)
 
