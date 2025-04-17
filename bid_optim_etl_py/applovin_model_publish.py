@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import os
 import shutil
@@ -7,6 +8,7 @@ from dataclasses import dataclass
 
 import boto3
 import joblib
+import requests
 
 from bid_optim_etl_py.applovin_train_runner import Predictor, ValueReplacer, Features, Field  # noqa
 
@@ -25,6 +27,7 @@ def arg_parser():
     parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
     parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
     parser.add_argument("--bidFloorVersion", help="Bid floor version")
+    parser.add_argument("--allocatorServiceUri", help="Allocator service URI")
     return parser.parse_args()
 
 
@@ -158,6 +161,43 @@ def publish_artifacts():
         s3_model_artifact_bucket=parsed_args_obj.s3ModelArtifactBucket,
         bid_floor_version=parsed_args_obj.bidFloorVersion,
     )
+
+    for model_id in parsed_args_obj.modelIds:
+        call_allocator_service(
+            allocator_service_uri=parsed_args_obj.allocatorServiceUri,
+            reference=parsed_args_obj.appId,
+            endpoint_name=f"bid_floor_{parsed_args_obj.appId}",
+            model_name=model_id,
+        )
+
+
+def call_allocator_service(allocator_service_uri: str, reference: str, endpoint_name: str, model_name: str):
+    logging.info(
+        f"Updating allocator service for application: {reference} "
+        f"with endpoint: {endpoint_name} and model_name: {model_name}"
+    )
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "reference": reference,
+        "endpointName": endpoint_name,
+        "modelName": model_name,
+    }
+
+    response = requests.put(
+        allocator_service_uri,
+        json.dumps(payload),
+        headers=headers,
+    )
+
+    if response.status_code != 200:
+        logging.exception(
+            f"Failed to update allocator service for experiment: {reference} "
+            f"with status code: {response.status_code}"
+        )
+        raise ApplovinETLException(
+            f"Failed to update allocator service for experiment: {reference} "
+            f"with status code: {response.status_code}"
+        )
 
 
 if __name__ == "__main__":
