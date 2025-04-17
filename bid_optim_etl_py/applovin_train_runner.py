@@ -245,7 +245,9 @@ class ModelTrainer:
             if ds.count() == 0:
                 continue
             values_with_min_impressions = ds.select_columns([col]).to_pandas()[col].tolist()
-            features_with_min_impressions[col] = sorted(list(set(values_with_min_impressions)))
+            features_with_min_impressions[col] = sorted(
+                list(set(values_with_min_impressions)), key=lambda x: (x is None, x)
+            )
 
         return ValueReplacer(valid_values=features_with_min_impressions, default_value=default_category)
 
