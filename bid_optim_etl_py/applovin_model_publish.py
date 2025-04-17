@@ -178,7 +178,7 @@ def call_allocator_service(allocator_service_uri: str, reference: str, endpoint_
     )
     headers = {"Content-Type": "application/json"}
     payload = {
-        "reference": reference,
+        "reference": str(reference),
         "endpointName": endpoint_name,
         "modelName": model_name,
     }
