@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
+from py4j.protocol import Py4JJavaError
 from pyspark.sql import SparkSession, DataFrame, Column, functions as F
 from pyspark.sql.functions import col, current_timestamp, from_json, hour
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
@@ -129,6 +130,12 @@ class Events:
         try:
             dataset = self.spark.read.option("mergeSchema", "true").parquet(path)
             return dataset.select(columns) if columns else dataset
+        except Py4JJavaError as py4j:
+            if str(py4j.java_exception).__contains__("java.io.FileNotFoundException"):
+                self.logger.error(f"File not found in path: {path}")
+                return self.spark.createDataFrame([], StructType([]))
+            else:
+                raise py4j
         except Exception as e:
             raise ApplovinETLException(f"Error reading parquet file from {path}: {e}")
 
