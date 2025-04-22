@@ -247,7 +247,7 @@ def extract_events(spark: SparkSession, logger: logging.Logger, args: [str]):
     ad_revenue_df = events.fetch_revenue_events()
 
     if assignments.isEmpty() or bid_sequence_df.isEmpty() or ad_revenue_df.isEmpty():
-        logger.info("No data found for the given date {}. Exiting.", events.date_iso)
+        logger.info(f"No data found for the given date {events.date_iso}. Exiting.")
         return
     assignment_contexts_denormalised = events.denormalise_context_field(assignments)
     final_df = events.join_all(assignment_contexts_denormalised, bid_sequence_df, ad_revenue_df)
