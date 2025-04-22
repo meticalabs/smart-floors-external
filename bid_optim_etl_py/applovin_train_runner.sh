@@ -33,5 +33,12 @@ pip install -U /tmp/env.tar.gz
 # -----------------------------------------------------------------------------
 echo "Running the Ray job"
 aws s3 cp "${PYTHON_RUNNER}" /tmp/runner.py
-python3 /tmp/runner.py --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}" "${EMPTY_MODEL_FLAG}"
+
+if [[ "${EMPTY_MODEL_FLAG}" == "true" ]]; then
+  EMPTY_MODEL_FLAG="--createEmptyModel"
+  python3 /tmp/runner.py --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}" "${EMPTY_MODEL_FLAG}"
+else
+  python3 /tmp/runner.py --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}"
+fi
+
 
