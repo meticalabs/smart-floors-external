@@ -3,7 +3,6 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-import boto3
 from py4j.protocol import Py4JJavaError
 from pyspark.sql import SparkSession, DataFrame, Column, functions as F
 from pyspark.sql.functions import col, current_timestamp, from_json, hour
