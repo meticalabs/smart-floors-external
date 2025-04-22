@@ -456,6 +456,7 @@ def arg_parser():
     parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
     parser.add_argument("--icebergTrainDataTable", help="Iceberg db table name for training data")
     parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
+    parser.add_argument("--createEmptyModel", action="store_true", help="Create empty model", default=False)
     return parser.parse_args()
 
 
@@ -630,41 +631,45 @@ def run():
         args.icebergTrainDataTable, args.customerId, args.appId, args.modelId, datetime.date.fromisoformat(args.date)
     ).drop_columns(["cpmFloorAdUnitIds"])
 
-    result, value_replacer, features = None, None, None
+    if training_data.limit(1).count() != 0 or args.createEmptyModel:
+        result, value_replacer, features = None, None, None
+        if not args.createEmptyModel:
+            logging.info("Training data is not empty, proceeding with model training")
+            trainer = ModelTrainer(
+                customer_id=args.customerId,
+                app_id=args.appId,
+                model_id=args.modelId,
+                date=datetime.datetime.fromisoformat(args.date),
+                s3_checkpoint_path=f"s3://{args.s3ModelArtifactBucket}/bid_floor_checkpoints/{args.date}/{args.customerId}/{args.appId}/",
+            )
+            result, value_replacer, features = trainer.run(
+                assignments_with_ad_revenue=training_data, target_column=Schema.TOTAL_AMOUNT, use_validation_set=True
+            )
+        else:
+            logging.info("Creating empty model as it is requested in the args")
 
-    if training_data.limit(1).count() != 0:
+        predictor = Predictor(
+            epsilon=0.1,
+            clf=RayTrainReportCallback.get_model(result.checkpoint) if result and result.checkpoint else None,
+            value_replacer=value_replacer,
+            features=features,
+        )
+
+        predictor_file_name = f"{args.customerId}_{args.appId}_{args.modelId}"
+        predictor_final_name_with_ext = f"{args.customerId}_{args.appId}_{args.modelId}.joblib"
+
+        save_predictor_model_to_s3(
+            predictor,
+            args.appId,
+            S3ModelArtifactInfo(
+                bucket=args.s3ModelArtifactBucket,
+                key=f"bid_floor_models/{args.date}/{predictor_final_name_with_ext}",
+                file_name=predictor_final_name_with_ext,
+                file_name_wo_ext=predictor_file_name,
+            ),
+        )
+    else:
         logging.warning("Training data is empty, hence skipping model training")
-        trainer = ModelTrainer(
-            customer_id=args.customerId,
-            app_id=args.appId,
-            model_id=args.modelId,
-            date=datetime.datetime.fromisoformat(args.date),
-            s3_checkpoint_path=f"s3://{args.s3ModelArtifactBucket}/bod_floor_checkpoints/{args.date}/{args.customerId}/{args.appId}/",
-        )
-        result, value_replacer, features = trainer.run(
-            assignments_with_ad_revenue=training_data, target_column=Schema.TOTAL_AMOUNT, use_validation_set=True
-        )
-
-    predictor = Predictor(
-        epsilon=0.1,
-        clf=RayTrainReportCallback.get_model(result.checkpoint) if result.checkpoint else None,
-        value_replacer=value_replacer,
-        features=features,
-    )
-
-    predictor_file_name = f"{args.customerId}_{args.appId}_{args.modelId}"
-    predictor_final_name_with_ext = f"{args.customerId}_{args.appId}_{args.modelId}.joblib"
-
-    save_predictor_model_to_s3(
-        predictor,
-        args.appId,
-        S3ModelArtifactInfo(
-            bucket=args.s3ModelArtifactBucket,
-            key=f"bid_floor_models/{args.date}/{predictor_final_name_with_ext}",
-            file_name=predictor_final_name_with_ext,
-            file_name_wo_ext=predictor_file_name,
-        ),
-    )
 
 
 if __name__ == "__main__":
