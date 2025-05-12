@@ -98,7 +98,9 @@ def create_tar_and_upload_to_s3(
     return sagemaker_model_tar_file
 
 
-def publish_model_artifact(customer_id, app_id, model_ids: [str], date, s3_model_artifact_bucket, bid_floor_version):
+def publish_model_artifact(
+    customer_id, app_id, model_ids: [str], date, s3_model_artifact_bucket, bid_floor_version
+) -> str:
     sagemaker_tar_content = {}
 
     for model_id in model_ids:
@@ -130,14 +132,16 @@ def publish_model_artifact(customer_id, app_id, model_ids: [str], date, s3_model
 
     local_tar_gz_artifact_name = f"bid_cb_{app_id}_{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}"
 
-    local_tar_file = os.path.join("/tmp", f"{local_tar_gz_artifact_name}.tar.gz")
+    tar_file_name = f"{local_tar_gz_artifact_name}.tar.gz"
+
+    local_tar_file = os.path.join("/tmp", tar_file_name)
 
     create_tar_archive(local_staging_folder, local_tar_file)
 
     sagemaker_model_artifact_path = S3ModelArtifactInfo(
         bucket=s3_model_artifact_bucket,
-        key=f"sagemaker_inference/bid-floor-{bid_floor_version}/{local_tar_gz_artifact_name}.tar.gz",
-        file_name=f"{local_tar_gz_artifact_name}.tar.gz",
+        key=f"sagemaker_inference/bid-floor-{bid_floor_version}/{tar_file_name}",
+        file_name=tar_file_name,
         file_name_wo_ext=local_tar_gz_artifact_name,
     )
 
@@ -149,11 +153,13 @@ def publish_model_artifact(customer_id, app_id, model_ids: [str], date, s3_model
         sagemaker_model_artifact_path.key,
     )
 
+    return tar_file_name
+
 
 def publish_artifacts():
     parsed_args_obj = arg_parser()
 
-    publish_model_artifact(
+    tar_file_name = publish_model_artifact(
         customer_id=parsed_args_obj.customerId,
         app_id=parsed_args_obj.appId,
         model_ids=parsed_args_obj.modelIds,
@@ -162,13 +168,12 @@ def publish_artifacts():
         bid_floor_version=parsed_args_obj.bidFloorVersion,
     )
 
-    for model_id in parsed_args_obj.modelIds:
-        call_allocator_service(
-            allocator_service_uri=parsed_args_obj.allocatorServiceUri,
-            reference=parsed_args_obj.appId,
-            endpoint_name=f"bid-floor-{parsed_args_obj.appId}-{parsed_args_obj.bidFloorVersion.replace('.', '-')}",
-            model_name=model_id,
-        )
+    call_allocator_service(
+        allocator_service_uri=parsed_args_obj.allocatorServiceUri,
+        reference=parsed_args_obj.appId,
+        endpoint_name=f"bid-floor-{parsed_args_obj.appId}-{parsed_args_obj.bidFloorVersion.replace('.', '-')}",
+        model_name=tar_file_name,
+    )
 
 
 def call_allocator_service(allocator_service_uri: str, reference: str, endpoint_name: str, model_name: str):
