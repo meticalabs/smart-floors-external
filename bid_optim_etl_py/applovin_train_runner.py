@@ -152,7 +152,6 @@ class ModelTrainer:
                 Field(name="user.avgRevenueLast24Hours", dtype="float32"),
                 Field(name="user.avgRevenueLast48Hours", dtype="float32"),
                 Field(name="user.avgRevenueLast72Hours", dtype="float32"),
-                Field(name="user.mostRecentAdSource", dtype="category"),
                 Field(name="user.mostRecentAdRevenue", dtype="float32"),
                 Field(name="highestBidFloorValue", dtype="float32"),
                 Field(name="mediumBidFloorValue", dtype="float32"),

@@ -116,7 +116,6 @@ class Events:
                 StructField("user.avgRevenueLast24Hours", DoubleType(), True),
                 StructField("user.avgRevenueLast48Hours", DoubleType(), True),
                 StructField("user.avgRevenueLast72Hours", DoubleType(), True),
-                StructField("user.mostRecentAdSource", DoubleType(), True),
                 StructField("user.mostRecentAdRevenue", DoubleType(), True),
             ]
         )
@@ -129,6 +128,12 @@ class Events:
         try:
             dataset = self.spark.read.option("mergeSchema", "true").parquet(path)
             return dataset.select(columns) if columns else dataset
+        except Exception as e:
+            if "Path does not exist" in str(e):
+                self.logger.info(f"No data found for {event_name} in {path}.")
+                return self.spark.createDataFrame([], schema=StructType([]))
+            else:
+                raise ApplovinETLException(f"Error reading parquet file from {path}: {e}")
         except Exception as e:
             raise ApplovinETLException(f"Error reading parquet file from {path}: {e}")
 
@@ -152,21 +157,29 @@ class Events:
         )
 
     def fetch_assignment_events(self):
+        assignment_event = self.read_events_parquet("metica_bid_floor_assignment")
+        if assignment_event.isEmpty():
+            self.logger.info(f"No assignment events found for date {self.date_iso}.")
+            return assignment_event
         return self.add_hardcoded_contexts(
-            self.read_events_parquet("metica_bid_floor_assignment").filter(
+            assignment_event.filter(
                 (col(Schema.DATE) <= self.date_iso) & self.valid_context_values() & self.has_valid_bid_floor_values()
             )
         )
 
     def fetch_revenue_events(self):
-        return self.read_events_parquet("estimated_ad_revenue", self.ad_revenue_columns).filter(
-            (col(Schema.DATE) <= self.date_iso) & self.valid_revenue_rows()
-        )
+        ad_revenue_event = self.read_events_parquet("estimated_ad_revenue", self.ad_revenue_columns)
+        if ad_revenue_event.isEmpty():
+            self.logger.info(f"No ad revenue events found for date {self.date_iso}.")
+            return ad_revenue_event
+        return ad_revenue_event.filter((col(Schema.DATE) <= self.date_iso) & self.valid_revenue_rows())
 
     def fetch_bid_sequence_events(self):
-        return self.read_events_parquet("applovin_bid_floor", self.bid_sequence_columns).filter(
-            col(Schema.IS_FILLED) & (col(Schema.DATE) <= self.date_iso)
-        )
+        bid_sequence_event = self.read_events_parquet("applovin_bid_floor", self.bid_sequence_columns)
+        if bid_sequence_event.isEmpty():
+            self.logger.info(f"No bid sequence events found for date {self.date_iso}.")
+            return bid_sequence_event
+        return bid_sequence_event.filter(col(Schema.IS_FILLED) & (col(Schema.DATE) <= self.date_iso))
 
     def join_all(self, assignment_data: DataFrame, bid_sequence_data: DataFrame, ad_revenue_data: DataFrame):
         merged_df = assignment_data.join(
