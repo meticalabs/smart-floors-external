@@ -117,22 +117,22 @@ class TestFeatures:
     def test_feature_assembler(self, model_object):
         df = model_object.features.assemble_fields_from_series(pd.Series({"user.country": "US"}))
         assert df is not None
-        assert df.shape == (1, 16)
+        assert df.shape == (1, 15)
 
     def test_feature_assembler_with_none(self, model_object):
         df = model_object.features.assemble_fields_from_series(pd.Series({"user.country": None}))
         assert df is not None
-        assert df.shape == (1, 16)
+        assert df.shape == (1, 15)
 
     def test_feature_assembler_with_empty(self, model_object):
         df = model_object.features.assemble_fields_from_series(pd.Series({}))
         assert df is not None
-        assert df.shape == (1, 16)
+        assert df.shape == (1, 15)
 
     def test_feature_assembler_with_empty_df(self, model_object):
         df = model_object.features.assemble_fields_from_df(pd.DataFrame({}))
         assert df is not None
-        assert df.shape == (1, 16)
+        assert df.shape == (1, 15)
 
 
 class TestModelTrainingRun:
@@ -144,7 +144,6 @@ class TestModelTrainingRun:
             "user.deviceType": ["iPhone", "Samsung", "Google"],
             "user.languageCode": ["en", "en", "en"],
             "user.osVersion": [None, "16.5", None],
-            "user.mostRecentAdSource": ["source1", "source2", "source3"],
             "user.mostRecentAdRevenue": [0.1, 0.2, 0.3],
             "user.avgRevenueLast24Hours": [0.1, 0.2, 0.3],
             "user.avgRevenueLast48Hours": [0.1, 0.2, 0.3],

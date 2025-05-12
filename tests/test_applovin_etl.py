@@ -195,7 +195,6 @@ class TestApplovinETL:
                 "user.avgRevenueLast24Hours": random.choice([None, 0.0, 1.0, 2.0]),
                 "user.avgRevenueLast48Hours": random.choice([None, 0.0, 1.0, 2.0]),
                 "user.avgRevenueLast72Hours": random.choice([None, 0.0, 1.0, 2.0]),
-                "user.mostRecentAdSource": random.choice([None, 0.0, 1.0, 2.0]),
                 "user.mostRecentAdRevenue": random.choice([None, 0.0, 1.0, 2.0]),
             }.items() if v is not None}))
             for _ in range(data_size)

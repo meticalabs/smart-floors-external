@@ -116,7 +116,6 @@ class Events:
                 StructField("user.avgRevenueLast24Hours", DoubleType(), True),
                 StructField("user.avgRevenueLast48Hours", DoubleType(), True),
                 StructField("user.avgRevenueLast72Hours", DoubleType(), True),
-                StructField("user.mostRecentAdSource", DoubleType(), True),
                 StructField("user.mostRecentAdRevenue", DoubleType(), True),
             ]
         )
