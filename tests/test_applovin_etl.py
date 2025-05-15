@@ -208,7 +208,8 @@ class TestApplovinETL:
                     ["ad_unit_1", "ad_unit_2", "ad_unit_3", "ad_unit_4",
                      "ad_unit_5"], k=3),
                 cpmFloorValues=random.choices([5.0, 4.0, 3.0, 2.0, 1.0], k=3),
-                assignmentHourOfDay=random.choice([None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]),
+                assignmentHourOfDay=random.choice([None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+                                                   15, 16, 17, 18, 19, 20, 21, 22, 23]),
                 assignmentDayOfWeek=random.choice([None, 1, 2, 3, 4, 5, 6, 7]),
                 propensity=0.5, inferenceData="{}",
                 date=datetime(2023, 1, 1).date()) for _ in range(data_size)])
