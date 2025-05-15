@@ -110,8 +110,6 @@ class Events:
                 StructField("user.deviceType", StringType(), True),
                 StructField("user.osVersion", StringType(), True),
                 StructField("user.deviceModel", StringType(), True),
-                StructField("assignmentDayOfWeek", IntegerType(), True),
-                StructField("assignmentHourOfDay", IntegerType(), True),
                 StructField("user.minRevenueLast24Hours", DoubleType(), True),
                 StructField("user.avgRevenueLast24Hours", DoubleType(), True),
                 StructField("user.avgRevenueLast48Hours", DoubleType(), True),
