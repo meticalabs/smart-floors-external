@@ -5,7 +5,7 @@ from typing import Optional
 
 from pyspark.sql import SparkSession, DataFrame, Column, functions as F
 from pyspark.sql.functions import col, current_timestamp, from_json, hour
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 
 from bid_optim_etl_py.spark.iceberg import IcebergIO, Maintenance, TableConfig
 
