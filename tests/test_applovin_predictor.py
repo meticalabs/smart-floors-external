@@ -100,18 +100,30 @@ def test_sort_assignment_by_ad_unit_name(assignments, expected_sorted):
 
 def test_predicts_random_assignment_when_model_is_not_trained():
     predictor = Predictor(epsilon=0.5)
+
     context = pd.Series({"user.country": "US"})
     floors = [
         {"name": "metica_ad_unit_1", "id": "1", "bidFloor": 1.0},
         {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0},
         {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
     ]
-    result = predictor.predict(context, floors)
+    result = predictor.predict(context, floors) # Only one possible assignment
     assert result == {
         "cpmFloorAdUnitIds": ["3", "2", "1"],
         "cpmFloorValues": [3.0, 2.0, 1.0],
-        "propensity": 0.5,
+        "propensity": 1,
     }
+
+    predictor = Predictor(epsilon=0.5) # resetting the predictor test with new floors
+    context = pd.Series({"user.country": "US"})
+    floors = [
+        {"name": "metica_ad_unit_1", "id": "1", "bidFloor": 1.0},
+        {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0},
+        {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
+        {"name": "metica_ad_unit_4", "id": "3", "bidFloor": 3.0},
+    ]
+    result = predictor.predict(context, floors)
+    assert result['propensity'] == 0.3333333333333333
 
 
 def test_empty_floors_throws_exception():
