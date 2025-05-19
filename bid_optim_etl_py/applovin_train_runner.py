@@ -556,7 +556,7 @@ class Predictor:
         # If the model is not trained or if the random number is less than epsilon, return a random assignment
         if self.clf is None:
             assignments = self.rng.choice(ad_unit_combinations, size=1)
-            propensity = self.epsilon / len(ad_unit_combinations)
+            propensity = 1 / len(ad_unit_combinations)
 
             return self.form_response(list(assignments[0]), lowest_bid_floor, propensity)
 
