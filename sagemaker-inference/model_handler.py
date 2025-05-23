@@ -17,10 +17,11 @@ class ContextualBanditModelHandler(object):
         predict_joblib_path = os.path.join(model_dir, f"{model_tar_extracted_dir}/predictor.joblib")
         print(f"Reading the files from {predict_joblib_path}")
         self.models = joblib.load(predict_joblib_path)
+        self.models = {k.lower(): v for k, v in self.models.items()}
         print(f"Totals present, [Models : {len(self.models)}]")
 
     def preprocess_single_request(self, body):
-        model_id = body["modelId"]
+        model_id = str(body["modelId"]).lower()
         context_series = pd.Series(body["context"])
         return {
             "model_id": model_id,
