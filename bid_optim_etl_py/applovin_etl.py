@@ -103,7 +103,7 @@ class Events:
             Schema.DATE,
         ]
 
-        self.context_schema = StructType(
+        self.context_schema = StructType( # TODO: Fetch from API
             [
                 StructField("user.country", StringType(), True),
                 StructField("user.languageCode", StringType(), True),

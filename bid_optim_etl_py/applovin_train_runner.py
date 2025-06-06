@@ -139,7 +139,7 @@ class ModelTrainer:
     num_boost_round: int = 100
 
     def __post_init__(self):
-        self.features = Features(
+        self.features = Features( # TODO: Fetch the schema from API
             [
                 Field(name="user.country", dtype="category"),
                 Field(name="user.languageCode", dtype="category"),
@@ -273,6 +273,10 @@ class ModelTrainer:
         # Get dataset shards
         train_ds = ray.train.get_dataset_shard("train").materialize().to_pandas()
         eval_ds = ray.train.get_dataset_shard("valid").materialize().to_pandas()
+
+        train_ds = cast_types(train_ds, {f.name: f.dtype for f in config["feature_columns"]})
+        eval_ds = cast_types(eval_ds, {f.name: f.dtype for f in config["feature_columns"]})
+
         train_weights_ds = ray.train.get_dataset_shard("train_weights").materialize().to_pandas()
         eval_weights_ds = ray.train.get_dataset_shard("valid_weights").materialize().to_pandas()
 
@@ -423,6 +427,8 @@ class ModelTrainer:
         # Preprocess the dataset
         preprocessed_train_dataset, preprocessed_valid_dataset, _ = self.preprocess_data(train_dataset, valid_dataset)
 
+        print(preprocessed_train_dataset.schema)
+
         # Prepare datasets for training
         datasets = {"train": preprocessed_train_dataset, "train_weights": train_weights}
         if valid_dataset:
@@ -449,6 +455,7 @@ def arg_parser():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the applovin bid floor training")
+    parser.add_argument("--region", type=str, help="AWS region name, e.g., us-east-1", required=True)
     parser.add_argument("--customerId", type=int, help="Customer ID")
     parser.add_argument("--appId", type=int, help="App ID")
     parser.add_argument("--modelId", type=str, help="Model ID")
@@ -459,7 +466,18 @@ def arg_parser():
     return parser.parse_args()
 
 
+def cast_types(batch: pd.DataFrame, schema: dict[str, str]) -> pd.DataFrame:
+    """
+    Casts the types of the columns in the batch DataFrame according to the provided schema.
+    """
+    for column, dtype in schema.items():
+        if column in batch.columns:
+            batch[column] = batch[column].astype(dtype)
+    return batch
+
+
 def read_training_data(
+    region: str,
     iceberg_train_data: str,
     customer_id: int,
     app_id: int,
@@ -468,7 +486,7 @@ def read_training_data(
     num_blocks: Optional[int] = None,
 ) -> ray.data.Dataset:
     try:
-        catalog = load_catalog(name="default", type="glue")
+        catalog = load_catalog(name="default", **{"type": "glue", "client.region": region})
         table = catalog.load_table(iceberg_train_data)
         table_data = table.scan(
             row_filter=EqualTo(Schema.CUSTOMER_ID, customer_id)
@@ -627,7 +645,12 @@ def run():
     args = arg_parser()
     init_ray_cluster()
     training_data = read_training_data(
-        args.icebergTrainDataTable, args.customerId, args.appId, args.modelId, datetime.date.fromisoformat(args.date)
+        args.region,
+        args.icebergTrainDataTable,
+        args.customerId,
+        args.appId,
+        args.modelId,
+        datetime.date.fromisoformat(args.date),
     ).drop_columns(["cpmFloorAdUnitIds"])
 
     if training_data.limit(1).count() != 0 or args.createEmptyModel:
@@ -641,6 +664,13 @@ def run():
                 date=datetime.datetime.fromisoformat(args.date),
                 s3_checkpoint_path=f"s3://{args.s3ModelArtifactBucket}/bid_floor_checkpoints/{args.date}/{args.customerId}/{args.appId}/",
             )
+
+            feature_schema = {(field.name, field.dtype) for field in trainer.features.fields}
+
+            training_data = training_data.map_batches(
+                lambda batch: cast_types(batch, dict(feature_schema)), batch_format="pandas"
+            )
+
             result, value_replacer, features = trainer.run(
                 assignments_with_ad_revenue=training_data, target_column=Schema.TOTAL_AMOUNT, use_validation_set=True
             )
