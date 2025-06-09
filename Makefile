@@ -46,7 +46,7 @@ clean:
 	rm -fr dist/
 	rm -fr .eggs/
 	find . -name '*.egg-info' -exec rm -fr {} +
-	find . -name '*.egg' -exec rm -f {} +
+	find . -name '*.egg' -exec rm -rf {} +
 	rm -fr .tox/
 	rm -f .coverage
 	rm -fr htmlcov/
