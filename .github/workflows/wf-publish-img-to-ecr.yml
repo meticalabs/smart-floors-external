@@ -21,7 +21,7 @@ on:
         default: ''
       ecr_repo:
         required: false
-        default: 'com.metica.ml.bid-floor-sagemaker-byoc'
+        default: 'com.metica.ml.bid-optim-etl-py'
         description: 'ECR Repo to deploy'
       arm:
         required: false
