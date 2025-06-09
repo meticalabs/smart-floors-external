@@ -7,7 +7,7 @@ authors = [
     { name = "Rowan Swiers", email = "rowan@metica.com" },
     { name = "Andrew Maher", email = "andrew@metica.com" },
 ]
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.12"
 readme = "README.md"
 dependencies = [
     "ray[all]==2.44.1",
