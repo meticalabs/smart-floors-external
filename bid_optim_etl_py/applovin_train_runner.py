@@ -659,7 +659,7 @@ def save_predictor_model_to_s3(predictor: Predictor, app_id: str, model_artifact
 
 
 def save_predictor_object(predictor: Predictor, args):
-    predictor_file_name = f"{args.customer_id}_{args.app_id}_{args.model_id}"
+    predictor_file_name = f"{args.customerId}_{args.appId}_{args.modelId}"
     predictor_final_name_with_ext = f"{predictor_file_name}.joblib"
 
     save_predictor_model_to_s3(
