@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 import boto3
-from etl_py_commons.cloud_watch import CloudWatchWrapper
+from bid_optim_etl_py.cloudwatch_wrapper import CloudWatchWrapper
 
 
 @dataclass
