@@ -11,6 +11,7 @@ import joblib
 import requests
 
 from bid_optim_etl_py.applovin_train_runner import Predictor, ValueReplacer, Features, Field  # noqa
+from bid_optim_etl_py.cw_publisher import CloudWatchAlerts
 
 
 class ApplovinETLException(Exception):
@@ -21,6 +22,7 @@ def arg_parser():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the applovin bid floor training")
+    parser.add_argument("--region", help="AWS region where the resources are located", required=True)
     parser.add_argument("--customerId", type=int, help="Customer ID")
     parser.add_argument("--appId", type=int, help="App ID")
     parser.add_argument("--modelIds", nargs="+", type=str, help="Model IDs")
@@ -98,22 +100,114 @@ def create_tar_and_upload_to_s3(
     return sagemaker_model_tar_file
 
 
+def empty_model(model_obj):
+    return isinstance(model_obj, Predictor) and model_obj.clf is None
+
+
+def download_model_obj_from_past_date(
+    customer_id, app_id, model_id, date, s3_model_artifact_bucket, cw_wrapper
+) -> Predictor:
+    import datetime
+
+    # Extracted artifact file name
+    artifact_file_name = f"{customer_id}_{app_id}_{model_id}.joblib"
+
+    # Refactored variable names for clarity
+    previous_date = (datetime.date.fromisoformat(date) - datetime.timedelta(days=1)).isoformat()
+    current_date_artifact_key = f"bid_floor_models/{date}/{artifact_file_name}"
+    previous_date_artifact_key = f"bid_floor_models/{previous_date}/{artifact_file_name}"
+
+    # S3 model artifact info object
+    current_date_artifact_path = S3ModelArtifactInfo(
+        bucket=s3_model_artifact_bucket,
+        key=current_date_artifact_key,
+        file_name=artifact_file_name,
+        file_name_wo_ext=artifact_file_name.rsplit(".", 1)[0],  # File name without extension
+    )
+
+    try:
+        # Attempt to download the model artifact for the current date
+        model_obj = download_model_artifact_from_s3(
+            customer_id,
+            app_id,
+            model_id,
+            current_date_artifact_path,
+            error_if_empty=True,
+        )
+    except Exception as e:
+        logging.warning(
+            f"Failed to download model artifact for date {date}: {e}. Attempting previous date {previous_date}."
+        )
+
+        copy_model_artifact(
+            s3_model_artifact_bucket,
+            previous_date_artifact_key,
+            current_date_artifact_key,
+        )
+
+        # Retry downloading
+        model_obj = download_model_artifact_from_s3(
+            customer_id,
+            app_id,
+            model_id,
+            current_date_artifact_path,
+            error_if_empty=True,
+        )
+
+        if not empty_model(model_obj):
+            # Publish alert if using a previous day's model due to training issues,
+            # this shouldn't occur as we train on snapshot data
+            cw_wrapper.publish_alert(
+                namespace="SmartBidPipeline",
+                name="ModelArtifactDownloadError",
+                value=1,
+                unit="Count",
+                dimensions={
+                    "Job": __file__,
+                    "CustomerId": str(customer_id),
+                    "AppId": str(app_id),
+                    "ModelId": model_id,
+                    "Date": date,
+                },
+            )
+
+    return model_obj if model_obj else None
+
+
+def copy_model_artifact(bucket, from_key, to_key):
+    """
+    Copies a model artifact from one key to another in the same S3 bucket
+    """
+    s3_client = boto3.client("s3")
+    response = s3_client.copy_object(
+        Bucket=bucket,
+        CopySource={"Bucket": bucket, "Key": from_key},
+        Key=to_key,
+    )
+    if response.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
+        raise ApplovinETLException(f"Failed to copy model artifact from {from_key} to {to_key} due to {response}")
+    logging.info(f"Copied model artifact from {from_key} to {to_key} successfully.")
+
+
 def publish_model_artifact(
-    customer_id, app_id, model_ids: [str], date, s3_model_artifact_bucket, bid_floor_version
+    region, customer_id, app_id, model_ids: [str], date, s3_model_artifact_bucket, bid_floor_version
 ) -> str:
+    cw_wrapper = CloudWatchAlerts(region=region).cw_wrapper
     sagemaker_tar_content = {}
 
     for model_id in model_ids:
-        model_artifact_path = S3ModelArtifactInfo(
-            bucket=s3_model_artifact_bucket,
-            key=f"bid_floor_models/{date}/{customer_id}_{app_id}_{model_id}.joblib",
-            file_name=f"{customer_id}_{app_id}_{model_id}.joblib",
-            file_name_wo_ext=f"{customer_id}_{app_id}_{model_id}",
+        model_obj = download_model_obj_from_past_date(
+            customer_id=customer_id,
+            app_id=app_id,
+            model_id=model_id,
+            date=date,
+            s3_model_artifact_bucket=s3_model_artifact_bucket,
+            cw_wrapper=cw_wrapper,
         )
 
-        model_obj = download_model_artifact_from_s3(
-            customer_id, app_id, model_id, model_artifact_path, error_if_empty=True
-        )
+        if model_obj is None:
+            logging.warning(f"Model object for {model_id} not found for date {date}. Skipping.")
+            continue
 
         sagemaker_tar_content[model_id] = model_obj
 
@@ -160,6 +254,7 @@ def publish_artifacts():
     parsed_args_obj = arg_parser()
 
     tar_file_name = publish_model_artifact(
+        region=parsed_args_obj.region,
         customer_id=parsed_args_obj.customerId,
         app_id=parsed_args_obj.appId,
         model_ids=parsed_args_obj.modelIds,

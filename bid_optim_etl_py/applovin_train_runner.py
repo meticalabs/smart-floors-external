@@ -19,6 +19,8 @@ from ray.train.xgboost import RayTrainReportCallback
 from ray.train.xgboost import XGBoostTrainer
 from xgboost import DMatrix
 
+from bid_optim_etl_py.cw_publisher import CloudWatchAlerts
+
 
 @dataclass
 class ValueReplacer:
@@ -139,7 +141,7 @@ class ModelTrainer:
     num_boost_round: int = 100
 
     def __post_init__(self):
-        self.features = Features( # TODO: Fetch the schema from API
+        self.features = Features(  # TODO: Fetch the schema from API
             [
                 Field(name="user.country", dtype="category"),
                 Field(name="user.languageCode", dtype="category"),
@@ -485,6 +487,7 @@ def read_training_data(
     date: datetime.date,
     num_blocks: Optional[int] = None,
 ) -> ray.data.Dataset:
+    cw_alert = CloudWatchAlerts(region=region)
     try:
         catalog = load_catalog(name="default", **{"type": "glue", "client.region": region})
         table = catalog.load_table(iceberg_train_data)
@@ -497,6 +500,20 @@ def read_training_data(
         if num_blocks:
             return table_data.repartition(num_blocks)
     except Exception:
+        cw_alert.cw_wrapper.put_metric_data(
+            namespace="SmartBidPipeline",
+            name="TrainingDataReadError",
+            value=1,
+            unit="Count",
+            dimensions={
+                "Job": os.path.basename(__file__),
+                "CustomerId": str(customer_id),
+                "AppId": str(app_id),
+                "ModelId": model_id,
+                "SnapshotDate": date,
+            },
+        )
+
         logging.exception("Error reading training data from Iceberg table")
         return ray.data.from_items([])
     return table_data
@@ -641,6 +658,22 @@ def save_predictor_model_to_s3(predictor: Predictor, app_id: str, model_artifact
     upload_model_file_to_s3(local_model_base_path, model_artifact_path)
 
 
+def save_predictor_object(predictor: Predictor, args):
+    predictor_file_name = f"{args.customer_id}_{args.app_id}_{args.model_id}"
+    predictor_final_name_with_ext = f"{predictor_file_name}.joblib"
+
+    save_predictor_model_to_s3(
+        predictor,
+        args.appId,
+        S3ModelArtifactInfo(
+            bucket=args.s3ModelArtifactBucket,
+            key=f"bid_floor_models/{args.date}/{predictor_final_name_with_ext}",
+            file_name=predictor_final_name_with_ext,
+            file_name_wo_ext=predictor_file_name,
+        ),
+    )
+
+
 def run():
     args = arg_parser()
     init_ray_cluster()
@@ -653,50 +686,50 @@ def run():
         datetime.date.fromisoformat(args.date),
     ).drop_columns(["cpmFloorAdUnitIds"])
 
-    if training_data.limit(1).count() != 0 or args.createEmptyModel:
-        result, value_replacer, features = None, None, None
-        if not args.createEmptyModel:
-            logging.info("Training data is not empty, proceeding with model training")
-            trainer = ModelTrainer(
-                customer_id=args.customerId,
-                app_id=args.appId,
-                model_id=args.modelId,
-                date=datetime.datetime.fromisoformat(args.date),
-                s3_checkpoint_path=f"s3://{args.s3ModelArtifactBucket}/bid_floor_checkpoints/{args.date}/{args.customerId}/{args.appId}/",
-            )
-
-            feature_schema = {(field.name, field.dtype) for field in trainer.features.fields}
-
-            training_data = training_data.map_batches(
-                lambda batch: cast_types(batch, dict(feature_schema)), batch_format="pandas"
-            )
-
-            result, value_replacer, features = trainer.run(
-                assignments_with_ad_revenue=training_data, target_column=Schema.TOTAL_AMOUNT, use_validation_set=True
-            )
-        else:
-            logging.info("Creating empty model as it is requested in the args")
-
-        predictor = Predictor(
-            epsilon=0.1,
-            clf=RayTrainReportCallback.get_model(result.checkpoint) if result and result.checkpoint else None,
-            value_replacer=value_replacer,
-            features=features,
-        )
-
-        predictor_file_name = f"{args.customerId}_{args.appId}_{args.modelId}"
-        predictor_final_name_with_ext = f"{args.customerId}_{args.appId}_{args.modelId}.joblib"
-
-        save_predictor_model_to_s3(
-            predictor,
-            args.appId,
-            S3ModelArtifactInfo(
-                bucket=args.s3ModelArtifactBucket,
-                key=f"bid_floor_models/{args.date}/{predictor_final_name_with_ext}",
-                file_name=predictor_final_name_with_ext,
-                file_name_wo_ext=predictor_file_name,
+    if args.createEmptyModel:
+        logging.info("Creating empty model as it is requested in the args")
+        save_predictor_object(
+            Predictor(
+                epsilon=0.1,
+                clf=None,
+                value_replacer=ValueReplacer(valid_values={}, default_value="other"),
+                features=Features([]),
             ),
+            args,
         )
+        return
+
+    if training_data.limit(1).count() != 0:
+        logging.info("Training data is not empty, proceeding with model training")
+        trainer = ModelTrainer(
+            customer_id=args.customerId,
+            app_id=args.appId,
+            model_id=args.modelId,
+            date=datetime.datetime.fromisoformat(args.date),
+            s3_checkpoint_path=f"s3://{args.s3ModelArtifactBucket}/bid_floor_checkpoints/"
+            f"{args.date}/{args.customerId}/{args.appId}/",
+        )
+
+        feature_schema = {(field.name, field.dtype) for field in trainer.features.fields}
+
+        training_data = training_data.map_batches(
+            lambda batch: cast_types(batch, dict(feature_schema)), batch_format="pandas"
+        )
+
+        result, value_replacer, features = trainer.run(
+            assignments_with_ad_revenue=training_data, target_column=Schema.TOTAL_AMOUNT, use_validation_set=True
+        )
+
+        save_predictor_object(
+            Predictor(
+                epsilon=0.1,
+                clf=RayTrainReportCallback.get_model(result.checkpoint),
+                value_replacer=value_replacer,
+                features=features,
+            ),
+            args,
+        )
+        logging.info("Model training completed successfully")
     else:
         logging.warning("Training data is empty, hence skipping model training")
 

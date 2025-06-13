@@ -12,6 +12,7 @@ ENV_TAR_FILE=$6
 S3_MODEL_ARTIFACT_BUCKET=$7
 DATE=$8
 ALLOCATOR_SERVICE_URI=$9
+REGION=${10}
 
 # -----------------------------------------------------------------------------
 # Activate the conda environment
@@ -33,5 +34,5 @@ pip install -U /tmp/publisher_env.tar.gz
 # -----------------------------------------------------------------------------
 echo "Running the Publisher job"
 aws s3 cp "${PYTHON_RUNNER}" /tmp/publisher_runner.py
-python3 /tmp/publisher_runner.py --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelIds ${MODEL_IDS//,/ } --bidFloorVersion "${BID_FLOOR_VERSION}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}" --allocatorServiceUri "${ALLOCATOR_SERVICE_URI}"
+python3 /tmp/publisher_runner.py --region "${REGION}" --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelIds ${MODEL_IDS//,/ } --bidFloorVersion "${BID_FLOOR_VERSION}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}" --allocatorServiceUri "${ALLOCATOR_SERVICE_URI}"
 
