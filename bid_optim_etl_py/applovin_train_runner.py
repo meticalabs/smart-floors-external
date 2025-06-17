@@ -1,8 +1,9 @@
+import dataclasses
 import datetime
 import itertools
 import logging
 import os
-from dataclasses import dataclass
+import sys
 from typing import Tuple, Optional
 
 import boto3
@@ -11,21 +12,27 @@ import numpy as np
 import pandas as pd
 import ray
 import xgboost
+from etl_py_commons.job_initialiser import Initialisation
+from pydantic import ConfigDict, BaseModel, SkipValidation
+from pydantic.dataclasses import dataclass
 from pyiceberg.catalog import load_catalog
-from pyiceberg.expressions import EqualTo, LessThanOrEqual
+from pyiceberg.expressions import EqualTo, LessThanOrEqual, GreaterThanOrEqual
 from ray.data import Dataset
 from ray.train import CheckpointConfig, RunConfig, ScalingConfig, Result
 from ray.train.xgboost import RayTrainReportCallback
 from ray.train.xgboost import XGBoostTrainer
 from xgboost import DMatrix
 
+from bid_optim_etl_py.cfg_parser import ConfigFile
+from bid_optim_etl_py.command_line_args import ApplovinModelTrainingArgsParser
 from bid_optim_etl_py.cw_publisher import CloudWatchAlerts
+from bid_optim_etl_py.utils.management_api import BidFloorManagementAPI, ETLConfig, HttpClient
 
 
 @dataclass
 class ValueReplacer:
     valid_values: dict
-    default_value: any
+    default_value: str | int | float
 
     def transform_series(self, series: pd.Series) -> pd.Series:
         for column, valid_vals in self.valid_values.items():
@@ -67,7 +74,7 @@ class Schema:
     MODEL_ID = "modelId"
 
 
-@dataclass(frozen=True)
+@dataclass
 class Field:
     name: str
     dtype: str
@@ -77,7 +84,7 @@ class Field:
 
 @dataclass
 class Features:
-    fields: list[Field]
+    fields: list[Field] = dataclasses.field(default_factory=list)
 
     def fields_sorted(self):
         return sorted(filter(lambda x: isinstance(x, Field), self.fields), key=lambda f: f.name)
@@ -132,35 +139,50 @@ def init_ray_cluster():
 
 
 @dataclass
+class ModelFeatures:
+    etl_config: ETLConfig
+
+    def as_ray_schema(self):
+        mandatory_context_fields = [
+            Field(name="assignmentDayOfWeek", dtype="Int64"),
+            Field(name="assignmentHourOfDay", dtype="Int64"),
+            Field(name="highestBidFloorValue", dtype="float32"),
+            Field(name="mediumBidFloorValue", dtype="float32"),
+            Field(name="totalAmount", dtype="float32", target_column=True, feature_column=False),
+        ]
+
+        features = Features(
+            [
+                Field(name=context.name, dtype=("category" if context.dataType.lower() == "string" else "float32"))
+                for context in self.etl_config.context
+            ]
+            + mandatory_context_fields
+        )
+        return features
+
+
+@dataclass
+class ModelConfig:
+    num_boost_rounds: int = 100
+    tree_method: str = "hist"
+    objective: str = "reg:squarederror"
+    learning_rate: float = 0.1
+    max_depth: int = 4
+    eval_metric: list[str] = dataclasses.field(default_factory=lambda: ["rmse", "mae"])
+
+
+@dataclass
 class ModelTrainer:
     customer_id: int
     app_id: int
     model_id: str
     date: datetime.datetime
+    features: Features
+    model_config: ModelConfig
     s3_checkpoint_path: Optional[str] = None
     num_boost_round: int = 100
 
     def __post_init__(self):
-        self.features = Features(  # TODO: Fetch the schema from API
-            [
-                Field(name="user.country", dtype="category"),
-                Field(name="user.languageCode", dtype="category"),
-                Field(name="user.deviceType", dtype="category"),
-                Field(name="user.osVersion", dtype="category"),
-                Field(name="user.deviceModel", dtype="category"),
-                Field(name="assignmentDayOfWeek", dtype="Int64"),
-                Field(name="assignmentHourOfDay", dtype="Int64"),
-                Field(name="user.minRevenueLast24Hours", dtype="float32"),
-                Field(name="user.avgRevenueLast24Hours", dtype="float32"),
-                Field(name="user.avgRevenueLast48Hours", dtype="float32"),
-                Field(name="user.avgRevenueLast72Hours", dtype="float32"),
-                Field(name="user.mostRecentAdRevenue", dtype="float32"),
-                Field(name="highestBidFloorValue", dtype="float32"),
-                Field(name="mediumBidFloorValue", dtype="float32"),
-                Field(name="totalAmount", dtype="float32", target_column=True, feature_column=False),
-            ]
-        )
-
         self.weight_column = "propensity"
 
     def _run_config(self, storage_path: Optional[str] = None) -> RunConfig:
@@ -268,7 +290,7 @@ class ModelTrainer:
         :param config: A dictionary containing training configurations. Must include:
                        - "target_column" (str): The target column in the training data.
                        - "feature_columns" (List[Field]): Metadata for feature columns, including name and dtype.
-                       - "num_boost_round" (int): Number of boosting rounds for the training.
+                       - "model_config" (ModelConfig): Configuration for the XGBoost model, including parameters like
         :type config: dict
         :return: None
         """
@@ -303,13 +325,15 @@ class ModelTrainer:
             else None
         )
 
+        model_config = config["model_config"]
+
         # Training parameters
         params = {
-            "tree_method": "hist",
-            "objective": "reg:squarederror",
-            "learning_rate": 0.1,
-            "max_depth": 4,
-            "eval_metric": ["rmse", "mae"],
+            "tree_method": model_config.tree_method,
+            "objective": model_config.objective,
+            "learning_rate": model_config.learning_rate,
+            "max_depth": model_config.max_depth,
+            "eval_metric": model_config.eval_metric,
         }
 
         # Train the model
@@ -317,7 +341,7 @@ class ModelTrainer:
             params,
             dtrain=dtrain,
             evals=[(dtrain, "train")] + [(deval, "validation")] if deval else None,
-            num_boost_round=config["num_boost_round"],
+            num_boost_round=model_config.num_boost_rounds,
             callbacks=[RayTrainReportCallback()],
         )
 
@@ -442,8 +466,8 @@ class ModelTrainer:
             train_loop_per_worker=self._train_fn_per_worker,
             train_loop_config={
                 "target_column": target_column,
-                "num_boost_round": self.num_boost_round,
                 "feature_columns": self.features.fields_sorted(),
+                "model_config": self.model_config,
             },
             scaling_config=ScalingConfig(num_workers=num_workers, use_gpu=False),
             datasets=datasets,
@@ -485,6 +509,7 @@ def read_training_data(
     app_id: int,
     model_id: str,
     date: datetime.date,
+    lookback_window_in_days: int,
     num_blocks: Optional[int] = None,
 ) -> ray.data.Dataset:
     cw_alert = CloudWatchAlerts(region=region)
@@ -496,6 +521,9 @@ def read_training_data(
             & EqualTo(Schema.APP_ID, app_id)
             & EqualTo(Schema.MODEL_ID, model_id)
             & LessThanOrEqual(Schema.DATE, date.strftime("%Y-%m-%d"))
+            & GreaterThanOrEqual(
+                Schema.DATE, (date - datetime.timedelta(days=lookback_window_in_days)).strftime("%Y-%m-%d")
+            )
         ).to_ray()
         if num_blocks:
             return table_data.repartition(num_blocks)
@@ -519,13 +547,14 @@ def read_training_data(
     return table_data
 
 
-@dataclass
-class Predictor:
+class Predictor(BaseModel):
     epsilon: float
-    rng: np.random.Generator = np.random.default_rng()
-    clf: Optional[xgboost.Booster] = None
-    value_replacer: Optional[ValueReplacer] = None
-    features: Optional[Features] = None
+    rng: SkipValidation[np.random.Generator] = dataclasses.field(default_factory=lambda: np.random.default_rng())
+    clf: SkipValidation[xgboost.Booster] | None = None
+    value_replacer: ValueReplacer | None = None
+    features: Features | None = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def sort_by_name_postfix_desc(self, assignments: list[dict]) -> list[dict]:
         """
@@ -675,18 +704,29 @@ def save_predictor_object(predictor: Predictor, args):
 
 
 def run():
-    args = arg_parser()
+    argvs = sys.argv[1:] if len(sys.argv) > 1 else []
+    parsed_args_obj = Initialisation.parse_args(args=argvs, parser_obj=ApplovinModelTrainingArgsParser())
+    cmd_line_args = parsed_args_obj.parsed_args
+    config_file = parsed_args_obj.read_config(
+        confs_dir_path=os.path.join(os.path.dirname(__file__), "confs"), config_clazz_type=ConfigFile
+    )
+    bid_floor_management_api = BidFloorManagementAPI(http_client=HttpClient(base_url=config_file.managementApiBaseUrl))
+    etl_config = bid_floor_management_api.fetch_etl_config(cmd_line_args.appId)
+    model_config = bid_floor_management_api.fetch_model_config(cmd_line_args.appId, cmd_line_args.modelId)
+
     init_ray_cluster()
+
     training_data = read_training_data(
-        args.region,
-        args.icebergTrainDataTable,
-        args.customerId,
-        args.appId,
-        args.modelId,
-        datetime.date.fromisoformat(args.date),
+        cmd_line_args.region,
+        cmd_line_args.icebergTrainDataTable,
+        cmd_line_args.customerId,
+        cmd_line_args.appId,
+        cmd_line_args.modelId,
+        datetime.date.fromisoformat(cmd_line_args.date),
+        etl_config.lookbackWindowInDays,
     ).drop_columns(["cpmFloorAdUnitIds"])
 
-    if args.createEmptyModel:
+    if cmd_line_args.createEmptyModel:
         logging.info("Creating empty model as it is requested in the args")
         save_predictor_object(
             Predictor(
@@ -695,22 +735,27 @@ def run():
                 value_replacer=ValueReplacer(valid_values={}, default_value="other"),
                 features=Features([]),
             ),
-            args,
+            cmd_line_args,
         )
         return
 
     if training_data.limit(1).count() != 0:
         logging.info("Training data is not empty, proceeding with model training")
+
+        model_features = ModelFeatures(etl_config=etl_config).as_ray_schema()
+
         trainer = ModelTrainer(
-            customer_id=args.customerId,
-            app_id=args.appId,
-            model_id=args.modelId,
-            date=datetime.datetime.fromisoformat(args.date),
-            s3_checkpoint_path=f"s3://{args.s3ModelArtifactBucket}/bid_floor_checkpoints/"
-            f"{args.date}/{args.customerId}/{args.appId}/",
+            customer_id=cmd_line_args.customerId,
+            app_id=cmd_line_args.appId,
+            model_id=cmd_line_args.modelId,
+            date=datetime.datetime.fromisoformat(cmd_line_args.date),
+            features=model_features,
+            model_config=ModelConfig(**model_config.parameters),
+            s3_checkpoint_path=f"s3://{cmd_line_args.s3ModelArtifactBucket}/bid_floor_checkpoints/"
+            f"{cmd_line_args.date}/{cmd_line_args.customerId}/{cmd_line_args.appId}/",
         )
 
-        feature_schema = {(field.name, field.dtype) for field in trainer.features.fields}
+        feature_schema = {(field.name, field.dtype) for field in model_features.fields}
 
         training_data = training_data.map_batches(
             lambda batch: cast_types(batch, dict(feature_schema)), batch_format="pandas"
@@ -727,7 +772,7 @@ def run():
                 value_replacer=value_replacer,
                 features=features,
             ),
-            args,
+            cmd_line_args,
         )
         logging.info("Model training completed successfully")
     else:

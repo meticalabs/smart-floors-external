@@ -1,6 +1,6 @@
 [project]
 name = "bid-optim-etl-py"
-version = "0.1.0"
+version = "0.2.dev0"
 description = "Implementation of bid floor optimisation training and inference"
 authors = [
     { name = "Subash Prabanantham", email = "subash@metica.com" },
@@ -18,6 +18,8 @@ dependencies = [
     "pyiceberg[glue]>=0.9.0,<0.10",
     "joblib>=1.4.2",
     "setuptools>=80.9.0",
+    "etl-py-commons @ git+https://github.com/meticalabs/etl-py-commons.git",
+    "pydantic>=2.11.5",
 ]
 
 [dependency-groups]
@@ -44,6 +46,9 @@ include = ["bid_optim_etl_py"]
 
 [tool.hatch.build.targets.wheel]
 include = ["bid_optim_etl_py"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [build-system]
 requires = ["hatchling"]
