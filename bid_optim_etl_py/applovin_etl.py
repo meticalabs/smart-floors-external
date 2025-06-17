@@ -10,7 +10,7 @@ from pyspark.sql import SparkSession, DataFrame, Column, functions as F
 from pyspark.sql.functions import col, current_timestamp, from_json, hour
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 
-from bid_optim_etl_py.cfg_parser import Config
+from bid_optim_etl_py.cfg_parser import ConfigFile
 from bid_optim_etl_py.command_line_args import ApplovinETLConfigParser
 from bid_optim_etl_py.spark.iceberg import IcebergIO, Maintenance, TableConfig
 from bid_optim_etl_py.utils.management_api import BidFloorManagementAPI, HttpClient
@@ -224,7 +224,7 @@ def _log_complete(logger: logging.Logger, args: [str]):
     logger.info(f"Completed Applovin ETL Runner PySpark job with args: {args}")
 
 
-def extract_events(spark: SparkSession, logger: logging.Logger, parsed_args_obj: Namespace, config: Config):
+def extract_events(spark: SparkSession, logger: logging.Logger, parsed_args_obj: Namespace, config_file: ConfigFile):
     events = Events(
         customer_id=parsed_args_obj.customerId,
         app_id=parsed_args_obj.appId,
@@ -235,7 +235,7 @@ def extract_events(spark: SparkSession, logger: logging.Logger, parsed_args_obj:
         region_name=parsed_args_obj.region,
         logger=logger,
         management_api=BidFloorManagementAPI(
-            http_client=HttpClient(base_url=config.managementApiBaseUrl),
+            http_client=HttpClient(base_url=config_file.managementApiBaseUrl),
         ),
     )
 
@@ -256,11 +256,11 @@ def extract_events(spark: SparkSession, logger: logging.Logger, parsed_args_obj:
 
 def run(spark: SparkSession, args: [str]):
     try:
-        parsed_args_obj = Initialisation.parse_args(args, ApplovinETLConfigParser())
+        parsed_args_obj = Initialisation.parse_args(args=args, parser_obj=ApplovinETLConfigParser())
         logger = Initialisation.fetch_logger(spark, __name__)
         _log_start(logger=logger, args=args)
-        config = parsed_args_obj.read_config(Path(__file__).parent.joinpath("confs"), Config)
-        extract_events(spark=spark, logger=logger, parsed_args_obj=parsed_args_obj.parsed_args, config=config)
+        config_file = parsed_args_obj.read_config(Path(__file__).parent.joinpath("confs"), ConfigFile)
+        extract_events(spark=spark, logger=logger, parsed_args_obj=parsed_args_obj.parsed_args, config_file=config_file)
         _log_complete(logger=logger, args=args)
     except Exception as exp:
         logging.exception("Error while running Applovin ETL")

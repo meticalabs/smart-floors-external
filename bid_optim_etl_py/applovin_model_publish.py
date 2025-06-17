@@ -3,14 +3,17 @@ import json
 import logging
 import os
 import shutil
+import sys
 import tarfile
 from dataclasses import dataclass
 
 import boto3
 import joblib
 import requests
+from etl_py_commons.job_initialiser import Initialisation
 
 from bid_optim_etl_py.applovin_train_runner import Predictor, ValueReplacer, Features, Field  # noqa
+from bid_optim_etl_py.command_line_args import ApplovinModelPublisherArgsParser
 from bid_optim_etl_py.cw_publisher import CloudWatchAlerts
 
 
@@ -251,7 +254,8 @@ def publish_model_artifact(
 
 
 def publish_artifacts():
-    parsed_args_obj = arg_parser()
+    argvs = sys.argv[1:] if len(sys.argv) > 1 else []
+    parsed_args_obj = Initialisation.parse_args(args=argvs, parser_obj=ApplovinModelPublisherArgsParser()).parsed_args
 
     tar_file_name = publish_model_artifact(
         region=parsed_args_obj.region,

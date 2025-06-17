@@ -13,7 +13,7 @@ from pyspark.sql.functions import date_format
 from pyspark.sql.types import StructType, StructField, TimestampType, ArrayType, DoubleType, StringType, BooleanType
 
 from bid_optim_etl_py.applovin_etl import Events, Schema
-from bid_optim_etl_py.cfg_parser import Config
+from bid_optim_etl_py.cfg_parser import ConfigFile
 from bid_optim_etl_py.utils.management_api import ETLConfig
 
 
@@ -145,9 +145,11 @@ class TestApplovinETL:
         return assignment_data, bid_sequence_data, ad_revenue_data
 
     @pytest.fixture
-    def config(self, request) -> Config:
+    def config(self, request) -> ConfigFile:
         dir_path = os.path.dirname(request.module.__file__)
-        return ConfigParser.parse(file_name="local", base_path=f"{dir_path}/resources/confs", config_clazz_type=Config)
+        return ConfigParser.parse(
+            file_name="local", base_path=f"{dir_path}/resources/confs", config_clazz_type=ConfigFile
+        )
 
     @pytest.fixture
     def events_instance(self, config, spark):

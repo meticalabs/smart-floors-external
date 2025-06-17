@@ -2,24 +2,29 @@ from typing import List
 
 import requests
 from pydantic import BaseModel
+from pydantic.dataclasses import dataclass
 
 
-class Context(BaseModel):
+@dataclass
+class Context:
     name: str
     dataType: str
 
 
-class ETLConfig(BaseModel):
+@dataclass
+class ETLConfig:
     context: List[Context]
     lookbackWindowInDays: int
 
 
-class ModelConfig(BaseModel):
+@dataclass
+class ModelConfig:
     modelId: str
     parameters: dict
 
 
-class HttpClient(BaseModel):
+@dataclass
+class HttpClient:
     base_url: str
 
     def get(self, endpoint: str, params: dict = None) -> requests.Response:
