@@ -1,16 +1,20 @@
 import json
-import logging
+import os
 import random
 import uuid
 from datetime import datetime
+from unittest import mock
 
 import pandas as pd
 import pytest
+from etl_py_commons.cfg_parser import ConfigParser
 from pyspark.sql import Row
 from pyspark.sql.functions import date_format
 from pyspark.sql.types import StructType, StructField, TimestampType, ArrayType, DoubleType, StringType, BooleanType
 
 from bid_optim_etl_py.applovin_etl import Events, Schema
+from bid_optim_etl_py.cfg_parser import Config
+from bid_optim_etl_py.utils.management_api import ETLConfig
 
 
 class TestApplovinETL:
@@ -140,25 +144,52 @@ class TestApplovinETL:
         ]
         return assignment_data, bid_sequence_data, ad_revenue_data
 
-    def test_join_all(self, spark, sample_data):
+    @pytest.fixture
+    def config(self, request) -> Config:
+        dir_path = os.path.dirname(request.module.__file__)
+        return ConfigParser.parse(file_name="local", base_path=f"{dir_path}/resources/confs", config_clazz_type=Config)
+
+    @pytest.fixture
+    def events_instance(self, config, spark):
+        mock_management_api = mock.Mock()
+        mock_management_api.fetch_etl_config.return_value = ETLConfig(
+            **{
+                "context": [
+                    {"name": "user.country", "dataType": "string"},
+                    {"name": "user.languageCode", "dataType": "string"},
+                    {"name": "user.deviceType", "dataType": "string"},
+                    {"name": "user.osVersion", "dataType": "string"},
+                    {"name": "user.deviceModel", "dataType": "string"},
+                    {"name": "user.minRevenueLast24Hours", "dataType": "number"},
+                    {"name": "user.avgRevenueLast24Hours", "dataType": "number"},
+                    {"name": "user.avgRevenueLast48Hours", "dataType": "number"},
+                    {"name": "user.avgRevenueLast72Hours", "dataType": "number"},
+                    {"name": "user.mostRecentAdRevenue", "dataType": "number"},
+                ],
+                "lookbackWindowInDays": 30,
+            }
+        )
+
+        return Events(
+            customer_id=123,
+            app_id=456,
+            s3_data_bucket="s3://example-bucket",
+            date=datetime(2023, 1, 1).date(),
+            spark=spark,
+            iceberg_catalog="example_catalog",
+            region_name="us-east-1",
+            logger=None,
+            management_api=mock_management_api,
+        )
+
+    def test_join_all(self, config, spark, events_instance, sample_data):
         assignment_data, bid_sequence_data, ad_revenue_data = sample_data
 
         assignment_df = spark.createDataFrame(assignment_data)
         bid_sequence_df = spark.createDataFrame(bid_sequence_data)
         ad_revenue_df = spark.createDataFrame(ad_revenue_data)
 
-        events = Events(
-            customer_id=123,
-            app_id=456,
-            s3_data_bucket="s3://dummy-bucket",
-            date=datetime(2023, 1, 1),
-            spark=spark,
-            iceberg_catalog="dummy_catalog",
-            region_name="us-east-1",
-            logger=logging.getLogger("test_logger"),
-        )
-
-        result_df = events.join_all(assignment_df, bid_sequence_df, ad_revenue_df)
+        result_df = events_instance.join_all(assignment_df, bid_sequence_df, ad_revenue_df)
 
         assert result_df.count() == 3
         assert all(
@@ -216,21 +247,28 @@ class TestApplovinETL:
         # fmt:on
         return assignment_data.join(context_data)
 
-    def test_denormalise_context_field(self, spark, assignment_data_with_complex_context):
-        events = Events(
-            customer_id=123,
-            app_id=456,
-            s3_data_bucket="s3://dummy-bucket",
-            date=datetime(2023, 1, 1),
-            spark=spark,
-            iceberg_catalog="dev",
-            region_name="us-east-1",
-            logger=logging.getLogger("test_logger"),
+    def test_denormalise_context_field(self, config, spark, events_instance, assignment_data_with_complex_context):
+        df = events_instance.denormalise_context_field(
+            assignment_data_with_complex_context, events_instance.fetch_context_schema()
         )
-        df = events.denormalise_context_field(assignment_data_with_complex_context)
         df.show(truncate=False)
         assert df.count() == assignment_data_with_complex_context.count()
-        assert all(col.name in df.columns for col in events.context_schema.fields)
+        expected_schema = StructType(
+            [
+                StructField("user.country", StringType(), True),
+                StructField("user.languageCode", StringType(), True),
+                StructField("user.deviceType", StringType(), True),
+                StructField("user.osVersion", StringType(), True),
+                StructField("user.deviceModel", StringType(), True),
+                StructField("user.minRevenueLast24Hours", DoubleType(), True),
+                StructField("user.avgRevenueLast24Hours", DoubleType(), True),
+                StructField("user.avgRevenueLast48Hours", DoubleType(), True),
+                StructField("user.avgRevenueLast72Hours", DoubleType(), True),
+                StructField("user.mostRecentAdRevenue", DoubleType(), True),
+            ]
+        )
+        assert all(col.name in df.columns for col in expected_schema.fields)
+        assert all(col.dataType == expected_schema[col.name].dataType for col in expected_schema.fields)
 
     def test_day_of_week(self, spark):
         from pyspark.sql import functions as F
@@ -259,19 +297,6 @@ class TestApplovinETL:
         ]
         # fmt: on
         return spark.createDataFrame(data, schema=schema)
-
-    @pytest.fixture
-    def events_instance(self, spark):
-        return Events(
-            customer_id=123,
-            app_id=456,
-            s3_data_bucket="s3://example-bucket",
-            date=datetime(2023, 1, 1).date(),
-            spark=spark,
-            iceberg_catalog="example_catalog",
-            region_name="us-east-1",
-            logger=None,
-        )
 
     def test_add_hardcoded_contexts(self, df_to_test_hardcoded_contexts, events_instance):
         df = events_instance.add_hardcoded_contexts(df_to_test_hardcoded_contexts)

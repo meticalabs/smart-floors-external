@@ -1,13 +1,19 @@
 import datetime
 import logging
+from argparse import Namespace
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
+from etl_py_commons.job_initialiser import Initialisation
 from pyspark.sql import SparkSession, DataFrame, Column, functions as F
 from pyspark.sql.functions import col, current_timestamp, from_json, hour
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 
+from bid_optim_etl_py.cfg_parser import Config
+from bid_optim_etl_py.command_line_args import ApplovinETLConfigParser
 from bid_optim_etl_py.spark.iceberg import IcebergIO, Maintenance, TableConfig
+from bid_optim_etl_py.utils.management_api import BidFloorManagementAPI, HttpClient
 
 
 class Schema:
@@ -35,30 +41,6 @@ class ApplovinETLException(Exception):
     pass
 
 
-def spark_log4j_logger(spark_session: SparkSession, logger_name: str):
-    log4jLogger = spark_session.sparkContext._jvm.org.apache.log4j
-    logger = log4jLogger.LogManager.getLogger(logger_name)
-    logger.setLevel(log4jLogger.Level.DEBUG)
-    return logger
-
-
-def arg_parser(args):
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run the applovin bid floor training")
-    parser.add_argument("--customerId", type=int, help="Customer ID")
-    parser.add_argument("--appId", type=int, help="App ID")
-    parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
-    parser.add_argument(
-        "--region", required=True, type=str, help="Region to load config (str). Ex: us-east-1, eu-west-1"
-    )
-    parser.add_argument("--s3DataBucket", help="S3 bucket name for all events and bid floor training data")
-    parser.add_argument(
-        "--icebergCatalog", required=True, type=str, help="Iceberg catalog name (str). Ex: iceberg_catalog."
-    )
-    return parser.parse_args(args)
-
-
 def sanitise_path(path):
     return path.strip("/")
 
@@ -72,6 +54,7 @@ class Events:
     spark: SparkSession
     iceberg_catalog: str
     region_name: str
+    management_api: BidFloorManagementAPI
     logger: logging.Logger
 
     def __post_init__(self):
@@ -103,20 +86,21 @@ class Events:
             Schema.DATE,
         ]
 
-        self.context_schema = StructType( # TODO: Fetch from API
-            [
-                StructField("user.country", StringType(), True),
-                StructField("user.languageCode", StringType(), True),
-                StructField("user.deviceType", StringType(), True),
-                StructField("user.osVersion", StringType(), True),
-                StructField("user.deviceModel", StringType(), True),
-                StructField("user.minRevenueLast24Hours", DoubleType(), True),
-                StructField("user.avgRevenueLast24Hours", DoubleType(), True),
-                StructField("user.avgRevenueLast48Hours", DoubleType(), True),
-                StructField("user.avgRevenueLast72Hours", DoubleType(), True),
-                StructField("user.mostRecentAdRevenue", DoubleType(), True),
-            ]
-        )
+    def fetch_context_schema(self):
+        etl_config = self.management_api.fetch_etl_config(app_id=self.app_id)
+        context_schema = StructType([])
+        if etl_config.context:
+            context_schema = StructType(
+                [
+                    StructField(
+                        context.name, StringType() if context.dataType.lower() == "string" else DoubleType(), True
+                    )
+                    for context in etl_config.context
+                ]
+            )
+        else:
+            self.logger.warning(f"No context fields found for app {self.app_id}. Using default schema.")
+        return context_schema
 
     def read_events_parquet(self, event_name, columns: Optional[list[str]] = None):
         path = (
@@ -197,12 +181,12 @@ class Events:
             }
         )
 
-    def denormalise_context_field(self, df: DataFrame):
+    def denormalise_context_field(self, df: DataFrame, context_schema: StructType):
         # Parse the JSON string in the 'context' column
-        df = df.withColumn("context_json", from_json(col("context"), self.context_schema))
-
+        df = df.withColumn("context_json", from_json(col("context"), context_schema))
         context_fields = {}
-        for field in self.context_schema.fields:
+
+        for field in context_schema.fields:
             context_fields.update({field.name: col("context_json").getItem(field.name)})
 
         if context_fields:
@@ -240,8 +224,7 @@ def _log_complete(logger: logging.Logger, args: [str]):
     logger.info(f"Completed Applovin ETL Runner PySpark job with args: {args}")
 
 
-def extract_events(spark: SparkSession, logger: logging.Logger, args: [str]):
-    parsed_args_obj = arg_parser(args)
+def extract_events(spark: SparkSession, logger: logging.Logger, parsed_args_obj: Namespace, config: Config):
     events = Events(
         customer_id=parsed_args_obj.customerId,
         app_id=parsed_args_obj.appId,
@@ -251,6 +234,9 @@ def extract_events(spark: SparkSession, logger: logging.Logger, args: [str]):
         iceberg_catalog=parsed_args_obj.icebergCatalog,
         region_name=parsed_args_obj.region,
         logger=logger,
+        management_api=BidFloorManagementAPI(
+            http_client=HttpClient(base_url=config.managementApiBaseUrl),
+        ),
     )
 
     assignments = events.fetch_assignment_events()
@@ -260,7 +246,9 @@ def extract_events(spark: SparkSession, logger: logging.Logger, args: [str]):
     if assignments.isEmpty() or bid_sequence_df.isEmpty() or ad_revenue_df.isEmpty():
         logger.info(f"No data found for the given date {events.date_iso}. Exiting.")
         return
-    assignment_contexts_denormalised = events.denormalise_context_field(assignments)
+
+    context_schema = events.fetch_context_schema()
+    assignment_contexts_denormalised = events.denormalise_context_field(assignments, context_schema)
     final_df = events.join_all(assignment_contexts_denormalised, bid_sequence_df, ad_revenue_df)
     events.save_as_iceberg(final_df)
     events.perform_maintenance()
@@ -268,9 +256,11 @@ def extract_events(spark: SparkSession, logger: logging.Logger, args: [str]):
 
 def run(spark: SparkSession, args: [str]):
     try:
-        logger = spark_log4j_logger(spark, __name__)
+        parsed_args_obj = Initialisation.parse_args(args, ApplovinETLConfigParser())
+        logger = Initialisation.fetch_logger(spark, __name__)
         _log_start(logger=logger, args=args)
-        extract_events(spark=spark, logger=logger, args=args)
+        config = parsed_args_obj.read_config(Path(__file__).parent.joinpath("confs"), Config)
+        extract_events(spark=spark, logger=logger, parsed_args_obj=parsed_args_obj.parsed_args, config=config)
         _log_complete(logger=logger, args=args)
     except Exception as exp:
         logging.exception("Error while running Applovin ETL")
