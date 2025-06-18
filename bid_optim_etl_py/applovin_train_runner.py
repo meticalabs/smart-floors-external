@@ -34,16 +34,14 @@ class ValueReplacer:
         return series
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        df.update(
-            {
-                column: (
-                    [None] * len(df)
-                    if column not in df.columns
-                    else df[column].apply(lambda x: self.default_value if x not in valid_vals else x)
-                )
-                for column, valid_vals in self.valid_values.items()
-            }
-        )
+        for column, valid_vals in self.valid_values.items():
+            if column in df.columns:
+                if isinstance(df[column], pd.CategoricalDtype):
+                    if self.default_value not in df[column].cat.categories:
+                        df[column] = df[column].cat.add_categories([self.default_value])
+                df[column] = df[column].apply(lambda x: self.default_value if x not in valid_vals else x)
+            else:
+                df[column] = [self.default_value] * len(df)
         return df
 
 
