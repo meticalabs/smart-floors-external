@@ -774,7 +774,16 @@ def run():
         )
         logging.info("Model training completed successfully")
     else:
-        logging.warning("Training data is empty, hence skipping model training")
+        logging.warning("Training data is empty, hence skipping model training, creating empty model.")
+        save_predictor_object(
+            Predictor(
+                epsilon=0.1,
+                clf=None,
+                value_replacer=ValueReplacer(valid_values={}, default_value="other"),
+                features=Features([]),
+            ),
+            args,
+        )
 
 
 if __name__ == "__main__":
