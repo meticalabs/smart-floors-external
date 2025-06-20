@@ -487,6 +487,7 @@ def arg_parser():
     parser.add_argument("--icebergTrainDataTable", help="Iceberg db table name for training data")
     parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
     parser.add_argument("--createEmptyModel", action="store_true", help="Create empty model", default=False)
+    parser.add_argument("--epsilon", type=float, default=0.1, help="Epsilon value for exploration in training")
     return parser.parse_args()
 
 
@@ -729,7 +730,7 @@ def run():
         logging.info("Creating empty model as it is requested in the args")
         save_predictor_object(
             Predictor(
-                epsilon=0.1,
+                epsilon=args.epsilon,
                 clf=None,
                 value_replacer=ValueReplacer(valid_values={}, default_value="other"),
                 features=Features([]),
@@ -766,7 +767,7 @@ def run():
 
         save_predictor_object(
             Predictor(
-                epsilon=0.1,
+                epsilon=args.epsilon,
                 clf=RayTrainReportCallback.get_model(result.checkpoint),
                 value_replacer=value_replacer,
                 features=features,
@@ -778,7 +779,7 @@ def run():
         logging.warning("Training data is empty, hence skipping model training, creating empty model.")
         save_predictor_object(
             Predictor(
-                epsilon=0.1,
+                epsilon=args.epsilon,
                 clf=None,
                 value_replacer=ValueReplacer(valid_values={}, default_value="other"),
                 features=Features([]),

@@ -7,7 +7,7 @@ from typing import Optional
 
 from etl_py_commons.job_initialiser import Initialisation
 from pyspark.sql import SparkSession, DataFrame, Column, functions as F
-from pyspark.sql.functions import col, current_timestamp, from_json, hour
+from pyspark.sql.functions import col, current_timestamp, from_json, hour, coalesce
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 
 from bid_optim_etl_py.cfg_parser import ConfigFile
@@ -163,21 +163,17 @@ class Events:
             return bid_sequence_event
         return bid_sequence_event.filter(col(Schema.IS_FILLED) & (col(Schema.DATE) <= self.date_iso))
 
-    def join_all(self, assignment_data: DataFrame, bid_sequence_data: DataFrame, ad_revenue_data: DataFrame):
-        merged_df = assignment_data.join(
+    def join_assignment_and_revenue(self, assignment_data: DataFrame, ad_revenue_data: DataFrame):
+        return assignment_data.join(
             ad_revenue_data.select(self.ad_revenue_columns).drop(Schema.DATE),
             on=[Schema.REQUEST_ID, Schema.USER_ID],
-            how="inner",
-        )
-        return merged_df.join(
-            bid_sequence_data.select(self.bid_sequence_columns).drop(Schema.DATE),
-            on=[Schema.REQUEST_ID, Schema.USER_ID, Schema.CPM_FLOOR_AD_UNIT_ID],
-            how="inner",
+            how="left",
         ).withColumns(
             {
                 Schema.EVENT_TIME: col(Schema.EVENT_TIME).cast("timestamp"),
                 Schema.DATE: col(Schema.EVENT_TIME).cast("date"),
                 Schema.LAST_UPDATE_TIME: current_timestamp(),
+                Schema.TOTAL_AMOUNT: coalesce(col(Schema.TOTAL_AMOUNT), F.lit(0.0)),
             }
         )
 
@@ -240,16 +236,15 @@ def extract_events(spark: SparkSession, logger: logging.Logger, parsed_args_obj:
     )
 
     assignments = events.fetch_assignment_events()
-    bid_sequence_df = events.fetch_bid_sequence_events()
     ad_revenue_df = events.fetch_revenue_events()
 
-    if assignments.isEmpty() or bid_sequence_df.isEmpty() or ad_revenue_df.isEmpty():
+    if assignments.isEmpty() or ad_revenue_df.isEmpty():
         logger.info(f"No data found for the given date {events.date_iso}. Exiting.")
         return
 
     context_schema = events.fetch_context_schema()
     assignment_contexts_denormalised = events.denormalise_context_field(assignments, context_schema)
-    final_df = events.join_all(assignment_contexts_denormalised, bid_sequence_df, ad_revenue_df)
+    final_df = events.join_assignment_and_revenue(assignment_contexts_denormalised, ad_revenue_df)
     events.save_as_iceberg(final_df)
     events.perform_maintenance()
 

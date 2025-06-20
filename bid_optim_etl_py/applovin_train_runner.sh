@@ -12,7 +12,8 @@ ENV_TAR_FILE=$6
 S3_MODEL_ARTIFACT_BUCKET=$7
 DATE=$8
 REGION=$9
-EMPTY_MODEL_FLAG=${10}
+EPSILON=${10}
+EMPTY_MODEL_FLAG=${11}
 
 # -----------------------------------------------------------------------------
 # Activate the conda environment
@@ -37,9 +38,9 @@ aws s3 cp "${PYTHON_RUNNER}" /tmp/runner.py
 
 if [[ "${EMPTY_MODEL_FLAG}" == "true" ]]; then
   EMPTY_MODEL_FLAG="--createEmptyModel"
-  python3 /tmp/runner.py --region "${REGION}" --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}" "${EMPTY_MODEL_FLAG}"
+  python3 /tmp/runner.py --region "${REGION}" --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}" --epsilon "${EPSILON}" "${EMPTY_MODEL_FLAG}"
 else
-  python3 /tmp/runner.py --region "${REGION}" --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}"
+  python3 /tmp/runner.py --region "${REGION}" --customerId "${CUSTOMER_ID}" --appId "${APP_ID}" --modelId "${MODEL_ID}" --icebergTrainDataTable "${ICEBERG_TRAIN_TABLE}" --s3ModelArtifactBucket "${S3_MODEL_ARTIFACT_BUCKET}" --date "${DATE}" --epsilon "${EPSILON}"
 fi
 
 
