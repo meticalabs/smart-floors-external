@@ -609,7 +609,8 @@ class Predictor(BaseModel):
         }
         return response
 
-    def predict(self, context: pd.Series, floors: list[dict]):
+    def predict(self, context: pd.Series, floors: list[pd.Series | dict]) -> dict:
+        floors = [floor.to_dict() if isinstance(floor, pd.Series) else floor for floor in floors]
         floors_to_predict, lowest_bid_floor = self.split_based_on_name(floors)
         ad_unit_combinations = [
             self.sort_by_name_postfix_desc(list(pair)) for pair in itertools.combinations(floors_to_predict, 2)
