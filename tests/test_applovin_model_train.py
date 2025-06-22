@@ -140,6 +140,17 @@ class TestImpressionCount:
                 }
             ),
         )
+    def test_calculate_impression_count_for_empty_ds(self, ray_cluster, sample_dataset):
+        trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
+        empty_dataset = ray.data.from_items([])
+        result = trainer.value_replacer_based_on_impressions(
+            empty_dataset, columns=["category"], min_impressions=2, default_category="default"
+        )
+        assert result.valid_values == {}
+        assert result.default_value == "default"
+
+    def test_calculate_impression_count_for_multiple_columns(self, ray_cluster, sample_dataset):
+        trainer = ModelTrainer(customer_id=1, app_id=1, model_id="test_model", date=datetime.datetime.now())
         result = trainer.value_replacer_based_on_impressions(
             sample_dataset, columns=["category", "adUnitId", "device"], min_impressions=2, default_category="default"
         )

@@ -254,21 +254,22 @@ class ModelTrainer:
             based on the minimum impressions and the default replacement category.
         """
         features_with_min_impressions = {}
-        for col in columns:
-            if col not in dataset.columns():
-                continue
-            ds = (
-                dataset.groupby(col)
-                .count()
-                .rename_columns({"count()": "count"})
-                .filter(lambda x: x["count"] >= min_impressions)
-            )
-            if ds.count() == 0:
-                continue
-            values_with_min_impressions = ds.select_columns([col]).to_pandas()[col].tolist()
-            features_with_min_impressions[col] = sorted(
-                list(set(values_with_min_impressions)), key=lambda x: (x is None, x)
-            )
+        if dataset.count() != 0:
+            for col in columns:
+                if col not in dataset.columns():
+                    continue
+                ds = (
+                    dataset.groupby(col)
+                    .count()
+                    .rename_columns({"count()": "count"})
+                    .filter(lambda x: x["count"] >= min_impressions)
+                )
+                if ds.count() == 0:
+                    continue
+                values_with_min_impressions = ds.select_columns([col]).to_pandas()[col].tolist()
+                features_with_min_impressions[col] = sorted(
+                    list(set(values_with_min_impressions)), key=lambda x: (x is None, x)
+                )
 
         return ValueReplacer(valid_values=features_with_min_impressions, default_value=default_category)
 
