@@ -115,6 +115,15 @@ def test_predicts_random_assignment_when_model_is_not_trained():
         "cpmFloorAdUnitIds": ["3", "2", "1"],
         "cpmFloorValues": [3.0, 2.0, 1.0],
         "propensity": 1,
+        "estimates": [
+            {
+                "adUnitIds": [
+                    {"bidFloor": 3.0, "id": "3", "name": "metica_ad_unit_3"},
+                    {"bidFloor": 2.0, "id": "2", "name": "metica_ad_unit_2"},
+                ],
+                "predictedBidFloor": -1.0,
+            }
+        ],
     }
 
     predictor = Predictor(epsilon=0.5)  # resetting the predictor test with new floors
@@ -126,7 +135,7 @@ def test_predicts_random_assignment_when_model_is_not_trained():
         {"name": "metica_ad_unit_4", "id": "3", "bidFloor": 3.0},
     ]
     result = predictor.predict(context, floors)
-    assert result["propensity"] == 0.3333333333333333
+    assert pytest.approx(result["propensity"], abs=1e-6) == 0.3333333333333333
 
 
 def test_empty_floors_throws_exception():
@@ -139,7 +148,7 @@ def test_empty_floors_throws_exception():
 def test_handles_missing_context_fields(mock_xgboost_model):
     predictor = Predictor(
         epsilon=0.1,
-        rng=Mock(uniform=Mock(return_value=0.5)),
+        rng_exploration=Mock(uniform=Mock(return_value=0.5)),
         clf=mock_xgboost_model,
         features=Features(
             fields=[
@@ -219,34 +228,41 @@ def test_forms_response_with_valid_assignments_and_lowest_bid_floor():
         [{"id": "1", "bidFloor": 2.0}, {"id": "2", "bidFloor": 3.0}],
         {"id": "3", "bidFloor": 1.0},
         0.8,
+        [{"adUnitIds": ["1", "2"], "predictedBidFloor": 2.0}],
     )
     assert result == {
         "cpmFloorAdUnitIds": ["1", "2", "3"],
         "cpmFloorValues": [2.0, 3.0, 1.0],
         "propensity": 0.8,
+        "estimates": [{"adUnitIds": ["1", "2"], "predictedBidFloor": 2.0}],
     }
 
 
 def test_handles_empty_assignments_list_fill_with_lowest():
     predictor = Predictor(epsilon=0.5)
-    result = predictor.form_response([], {"id": "1", "bidFloor": 1.0}, 0.5)
+    result = predictor.form_response(
+        [], {"id": "1", "bidFloor": 1.0}, 0.5, [{"adUnitIds": ["1"], "predictedBidFloor": 1.0}]
+    )
     assert result == {
         "cpmFloorAdUnitIds": ["1"] * 3,
         "cpmFloorValues": [1.0] * 3,
         "propensity": 0.5,
+        "estimates": [{"adUnitIds": ["1"], "predictedBidFloor": 1.0}],
     }
 
 
 def test_handles_missing_lowest_bid_floor():
     predictor = Predictor(epsilon=0.5)
     with pytest.raises(Exception):
-        predictor.form_response([{"id": "1", "bidFloor": 2.0}], {}, 0.7)
+        predictor.form_response(
+            [{"id": "1", "bidFloor": 2.0}], {}, 0.7, [{"adUnitIds": ["1"], "predictedBidFloor": 2.0}]
+        )
 
 
 def test_handles_empty_assignments_and_missing_lowest_bid_floor():
     predictor = Predictor(epsilon=0.5)
     with pytest.raises(Exception):
-        predictor.form_response([], {}, 0.3)
+        predictor.form_response([], {}, 0.3, [{"adUnitIds": ["1"], "predictedBidFloor": 1.0}])
 
 
 def test_predict_model_present_random_not_triggered():
@@ -254,13 +270,43 @@ def test_predict_model_present_random_not_triggered():
     mock_rng.uniform.return_value = 0.2  # >= 0.1, no random choice
     mock_model = Mock()
     mock_model.predict.return_value = [10.0, 8.0, 9.0]  # Best: [4,3]
-    predictor = Predictor(epsilon=0.1, rng=mock_rng, clf=mock_model, features=features, value_replacer=None)
+    predictor = Predictor(
+        epsilon=0.1,
+        rng_exploration=mock_rng,
+        rng_shuffle=mock_rng,
+        clf=mock_model,
+        features=features,
+        value_replacer=None,
+    )
     context = pd.Series({"user.country": "US"})
     result = predictor.predict(context, floors)
     expected_response = {
         "cpmFloorAdUnitIds": ["4", "3", "1"],
         "cpmFloorValues": [4.0, 3.0, 1.0],
         "propensity": pytest.approx(0.9333, abs=1e-4),
+        "estimates": [
+            {
+                "adUnitIds": [
+                    {"bidFloor": 4.0, "id": "4", "name": "metica_ad_unit_4"},
+                    {"bidFloor": 3.0, "id": "3", "name": "metica_ad_unit_3"},
+                ],
+                "predictedBidFloor": 10.0,
+            },
+            {
+                "adUnitIds": [
+                    {"bidFloor": 4.0, "id": "4", "name": "metica_ad_unit_4"},
+                    {"bidFloor": 2.0, "id": "2", "name": "metica_ad_unit_2"},
+                ],
+                "predictedBidFloor": 8.0,
+            },
+            {
+                "adUnitIds": [
+                    {"bidFloor": 3.0, "id": "3", "name": "metica_ad_unit_3"},
+                    {"bidFloor": 2.0, "id": "2", "name": "metica_ad_unit_2"},
+                ],
+                "predictedBidFloor": 9.0,
+            },
+        ],
     }
     assert result == expected_response
 
@@ -271,13 +317,43 @@ def test_predict_model_present_random_triggered_not_best():
     mock_rng.choice.return_value = [[floors[0], floors[2]]]  # Chooses [4,2]
     mock_model = Mock()
     mock_model.predict.return_value = [10.0, 8.0, 9.0]  # Best: [4,3]
-    predictor = Predictor(epsilon=0.1, rng=mock_rng, clf=mock_model, features=features, value_replacer=None)
+    predictor = Predictor(
+        epsilon=0.1,
+        rng_exploration=mock_rng,
+        rng_shuffle=mock_rng,
+        clf=mock_model,
+        features=features,
+        value_replacer=None,
+    )
     context = pd.Series({"user.country": "US"})
     result = predictor.predict(context, floors)
     expected_response = {
         "cpmFloorAdUnitIds": ["4", "2", "1"],
         "cpmFloorValues": [4.0, 2.0, 1.0],
         "propensity": pytest.approx(0.0333, abs=1e-4),
+        "estimates": [
+            {
+                "adUnitIds": [
+                    {"bidFloor": 4.0, "id": "4", "name": "metica_ad_unit_4"},
+                    {"bidFloor": 3.0, "id": "3", "name": "metica_ad_unit_3"},
+                ],
+                "predictedBidFloor": 10.0,
+            },
+            {
+                "adUnitIds": [
+                    {"bidFloor": 4.0, "id": "4", "name": "metica_ad_unit_4"},
+                    {"bidFloor": 2.0, "id": "2", "name": "metica_ad_unit_2"},
+                ],
+                "predictedBidFloor": 8.0,
+            },
+            {
+                "adUnitIds": [
+                    {"bidFloor": 3.0, "id": "3", "name": "metica_ad_unit_3"},
+                    {"bidFloor": 2.0, "id": "2", "name": "metica_ad_unit_2"},
+                ],
+                "predictedBidFloor": 9.0,
+            },
+        ],
     }
     assert result == expected_response
 
@@ -288,13 +364,44 @@ def test_predict_model_present_random_triggered_is_best():
     mock_rng.choice.return_value = [[floors[0], floors[1]]]  # Chooses [4,3]
     mock_model = Mock()
     mock_model.predict.return_value = [10.0, 8.0, 9.0]  # Best: [4,3]
-    predictor = Predictor(epsilon=0.1, rng=mock_rng, clf=mock_model, features=features, value_replacer=None)
+    predictor = Predictor(
+        epsilon=0.1,
+        rng_exploration=mock_rng,
+        rng_shuffle=mock_rng,
+        clf=mock_model,
+        features=features,
+        value_replacer=None,
+    )
     context = pd.Series({"user.country": "US"})
     result = predictor.predict(context, floors)
+    print(result)
     expected_response = {
         "cpmFloorAdUnitIds": ["4", "3", "1"],
         "cpmFloorValues": [4.0, 3.0, 1.0],
-        "propensity": pytest.approx(0.9333, abs=1e-4),
+        "propensity": 0.9333333333333333,
+        "estimates": [
+            {
+                "adUnitIds": [
+                    {"name": "metica_ad_unit_4", "id": "4", "bidFloor": 4.0},
+                    {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
+                ],
+                "predictedBidFloor": 10.0,
+            },
+            {
+                "adUnitIds": [
+                    {"name": "metica_ad_unit_4", "id": "4", "bidFloor": 4.0},
+                    {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0},
+                ],
+                "predictedBidFloor": 8.0,
+            },
+            {
+                "adUnitIds": [
+                    {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
+                    {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0},
+                ],
+                "predictedBidFloor": 9.0,
+            },
+        ],
     }
     assert result == expected_response
 
@@ -305,7 +412,14 @@ def test_predict_model_with_series_ad_units():
     mock_rng.choice.return_value = [[floors[0], floors[1]]]  # Chooses [4,3]
     mock_model = Mock()
     mock_model.predict.return_value = [10.0, 8.0, 9.0]  # Best: [4,3]
-    predictor = Predictor(epsilon=0.1, rng=mock_rng, clf=mock_model, features=features, value_replacer=None)
+    predictor = Predictor(
+        epsilon=0.1,
+        rng_exploration=mock_rng,
+        rng_shuffle=mock_rng,
+        clf=mock_model,
+        features=features,
+        value_replacer=None,
+    )
     context = pd.Series({"user.country": "US"})
     floors_series = [pd.Series(floor) for floor in floors]
     result = predictor.predict(context, floors_series)
@@ -313,5 +427,28 @@ def test_predict_model_with_series_ad_units():
         "cpmFloorAdUnitIds": ["4", "3", "1"],
         "cpmFloorValues": [4.0, 3.0, 1.0],
         "propensity": pytest.approx(0.9333, abs=1e-4),
+        "estimates": [
+            {
+                "adUnitIds": [
+                    {"bidFloor": 4.0, "id": "4", "name": "metica_ad_unit_4"},
+                    {"bidFloor": 3.0, "id": "3", "name": "metica_ad_unit_3"},
+                ],
+                "predictedBidFloor": 10.0,
+            },
+            {
+                "adUnitIds": [
+                    {"bidFloor": 4.0, "id": "4", "name": "metica_ad_unit_4"},
+                    {"bidFloor": 2.0, "id": "2", "name": "metica_ad_unit_2"},
+                ],
+                "predictedBidFloor": 8.0,
+            },
+            {
+                "adUnitIds": [
+                    {"bidFloor": 3.0, "id": "3", "name": "metica_ad_unit_3"},
+                    {"bidFloor": 2.0, "id": "2", "name": "metica_ad_unit_2"},
+                ],
+                "predictedBidFloor": 9.0,
+            },
+        ],
     }
     assert result == expected_response
