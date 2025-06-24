@@ -730,7 +730,7 @@ def run():
         logging.info("Creating empty model as it is requested in the args")
         save_predictor_object(
             Predictor(
-                epsilon=args.epsilon,
+                epsilon=cmd_line_args.epsilon,
                 clf=None,
                 value_replacer=ValueReplacer(valid_values={}, default_value="other"),
                 features=Features([]),
@@ -767,7 +767,7 @@ def run():
 
         save_predictor_object(
             Predictor(
-                epsilon=args.epsilon,
+                epsilon=cmd_line_args.epsilon,
                 clf=RayTrainReportCallback.get_model(result.checkpoint),
                 value_replacer=value_replacer,
                 features=features,
@@ -779,7 +779,7 @@ def run():
         logging.warning("Training data is empty, hence skipping model training, creating empty model.")
         save_predictor_object(
             Predictor(
-                epsilon=args.epsilon,
+                epsilon=cmd_line_args.epsilon,
                 clf=None,
                 value_replacer=ValueReplacer(valid_values={}, default_value="other"),
                 features=Features([]),
