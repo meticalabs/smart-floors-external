@@ -782,7 +782,7 @@ def run():
                 value_replacer=ValueReplacer(valid_values={}, default_value="other"),
                 features=Features([]),
             ),
-            args,
+            cmd_line_args,
         )
 
 
