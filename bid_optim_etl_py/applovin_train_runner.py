@@ -254,21 +254,22 @@ class ModelTrainer:
             based on the minimum impressions and the default replacement category.
         """
         features_with_min_impressions = {}
-        for col in columns:
-            if col not in dataset.columns():
-                continue
-            ds = (
-                dataset.groupby(col)
-                .count()
-                .rename_columns({"count()": "count"})
-                .filter(lambda x: x["count"] >= min_impressions)
-            )
-            if ds.count() == 0:
-                continue
-            values_with_min_impressions = ds.select_columns([col]).to_pandas()[col].tolist()
-            features_with_min_impressions[col] = sorted(
-                list(set(values_with_min_impressions)), key=lambda x: (x is None, x)
-            )
+        if dataset.count() != 0:
+            for col in columns:
+                if col not in dataset.columns():
+                    continue
+                ds = (
+                    dataset.groupby(col)
+                    .count()
+                    .rename_columns({"count()": "count"})
+                    .filter(lambda x: x["count"] >= min_impressions)
+                )
+                if ds.count() == 0:
+                    continue
+                values_with_min_impressions = ds.select_columns([col]).to_pandas()[col].tolist()
+                features_with_min_impressions[col] = sorted(
+                    list(set(values_with_min_impressions)), key=lambda x: (x is None, x)
+                )
 
         return ValueReplacer(valid_values=features_with_min_impressions, default_value=default_category)
 
@@ -487,6 +488,7 @@ def arg_parser():
     parser.add_argument("--icebergTrainDataTable", help="Iceberg db table name for training data")
     parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
     parser.add_argument("--createEmptyModel", action="store_true", help="Create empty model", default=False)
+    parser.add_argument("--epsilon", type=float, default=0.1, help="Epsilon value for exploration in training")
     return parser.parse_args()
 
 
@@ -547,7 +549,12 @@ def read_training_data(
 
 class Predictor(BaseModel):
     epsilon: float
-    rng: SkipValidation[np.random.Generator] = dataclasses.field(default_factory=lambda: np.random.default_rng())
+    rng_exploration: SkipValidation[np.random.Generator] = dataclasses.field(
+        default_factory=lambda: np.random.default_rng()
+    )
+    rng_shuffle: SkipValidation[np.random.Generator] = dataclasses.field(
+        default_factory=lambda: np.random.default_rng()
+    )
     clf: SkipValidation[xgboost.Booster] | None = None
     value_replacer: ValueReplacer | None = None
     features: Features | None = None
@@ -589,12 +596,19 @@ class Predictor(BaseModel):
         sorted_by_ad_unit_name = self.sort_by_name_postfix_desc(ad_unit_list)
         return sorted_by_ad_unit_name[:-1], sorted_by_ad_unit_name[-1:][0]
 
-    def form_response(self, assignments: list[dict], lowest_bid_floor: dict, propensity: float) -> dict:
+    def form_response(
+        self,
+        assignments: list[dict],
+        lowest_bid_floor: dict,
+        propensity: float,
+        prediction_estimates: list[dict],
+    ) -> dict:
         """
         Forms the response dictionary with the predicted bid floor and other details.
         :param assignments: List of assignments.
         :param lowest_bid_floor: The lowest bid floor ad unit.
         :param propensity: The propensity value.
+        :param prediction_estimates: List of prediction estimates for the ad units.
         :return: Response dictionary.
         """
         ad_units = assignments + [lowest_bid_floor]
@@ -606,21 +620,31 @@ class Predictor(BaseModel):
             "cpmFloorAdUnitIds": list(map(lambda x: x["id"], ad_units)),
             "cpmFloorValues": list(map(lambda x: x["bidFloor"], ad_units)),
             "propensity": propensity,
+            "estimates": prediction_estimates,
         }
         return response
 
-    def predict(self, context: pd.Series, floors: list[dict]):
+    def predict(self, context: pd.Series, floors: list[pd.Series | dict]) -> dict:
+        floors = [floor.to_dict() if isinstance(floor, pd.Series) else floor for floor in floors]
         floors_to_predict, lowest_bid_floor = self.split_based_on_name(floors)
         ad_unit_combinations = [
             self.sort_by_name_postfix_desc(list(pair)) for pair in itertools.combinations(floors_to_predict, 2)
         ]
 
+        # Shuffle the ad unit combinations to ensure randomness in selection if estimates are same
+        self.rng_shuffle.shuffle(ad_unit_combinations)
+
         # If the model is not trained or if the random number is less than epsilon, return a random assignment
         if self.clf is None:
-            assignments = self.rng.choice(ad_unit_combinations, size=1)
+            assignments = self.rng_exploration.choice(ad_unit_combinations, size=1)
             propensity = 1 / len(ad_unit_combinations)
 
-            return self.form_response(list(assignments[0]), lowest_bid_floor, propensity)
+            return self.form_response(
+                list(assignments[0]),
+                lowest_bid_floor,
+                propensity,
+                [{"adUnitIds": list(assignments[0]), "predictedBidFloor": -1.0}],
+            )
 
         transformed = []
         for ad_unit_list in ad_unit_combinations:
@@ -629,24 +653,24 @@ class Predictor(BaseModel):
 
         feature_dmatrix = self.features.fields_to_dmatrix_from_df(pd.DataFrame(transformed), prediction_phase=True)
         predictions_array = self.clf.predict(feature_dmatrix)
-        predictions = [
+        prediction_estimates = [
             {
-                "adUnit": ad_unit_list,
+                "adUnitIds": list(ad_unit_list),
                 "predictedBidFloor": float(pred),
             }
             for ad_unit_list, pred in zip(ad_unit_combinations, predictions_array)
         ]
-        best_bid_floor_combo = max(predictions, key=lambda x: x["predictedBidFloor"])
+        best_bid_floor_combo = max(prediction_estimates, key=lambda x: x["predictedBidFloor"])
         propensity = (1 - self.epsilon) + self.epsilon / len(ad_unit_combinations)
 
-        if self.rng.uniform() < self.epsilon:
-            assignments = self.rng.choice(ad_unit_combinations, size=1)
-            if best_bid_floor_combo["adUnit"] != assignments[0]:
+        if self.rng_exploration.uniform() < self.epsilon:
+            assignments = self.rng_exploration.choice(ad_unit_combinations, size=1)
+            if best_bid_floor_combo["adUnitIds"] != list(assignments[0]):
                 propensity = self.epsilon / len(ad_unit_combinations)
 
-            return self.form_response(list(assignments[0]), lowest_bid_floor, propensity)
+            return self.form_response(list(assignments[0]), lowest_bid_floor, propensity, prediction_estimates)
 
-        return self.form_response(best_bid_floor_combo["adUnit"], lowest_bid_floor, propensity)
+        return self.form_response(best_bid_floor_combo["adUnitIds"], lowest_bid_floor, propensity, prediction_estimates)
 
 
 @dataclass
@@ -728,7 +752,7 @@ def run():
         logging.info("Creating empty model as it is requested in the args")
         save_predictor_object(
             Predictor(
-                epsilon=0.1,
+                epsilon=cmd_line_args.epsilon,
                 clf=None,
                 value_replacer=ValueReplacer(valid_values={}, default_value="other"),
                 features=Features([]),
@@ -765,7 +789,7 @@ def run():
 
         save_predictor_object(
             Predictor(
-                epsilon=0.1,
+                epsilon=cmd_line_args.epsilon,
                 clf=RayTrainReportCallback.get_model(result.checkpoint),
                 value_replacer=value_replacer,
                 features=features,
@@ -774,7 +798,16 @@ def run():
         )
         logging.info("Model training completed successfully")
     else:
-        logging.warning("Training data is empty, hence skipping model training")
+        logging.warning("Training data is empty, hence skipping model training, creating empty model.")
+        save_predictor_object(
+            Predictor(
+                epsilon=cmd_line_args.epsilon,
+                clf=None,
+                value_replacer=ValueReplacer(valid_values={}, default_value="other"),
+                features=Features([]),
+            ),
+            cmd_line_args,
+        )
 
 
 if __name__ == "__main__":

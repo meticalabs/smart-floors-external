@@ -188,20 +188,22 @@ class TestApplovinETL:
         assignment_data, bid_sequence_data, ad_revenue_data = sample_data
 
         assignment_df = spark.createDataFrame(assignment_data)
-        bid_sequence_df = spark.createDataFrame(bid_sequence_data)
         ad_revenue_df = spark.createDataFrame(ad_revenue_data)
 
-        result_df = events_instance.join_all(assignment_df, bid_sequence_df, ad_revenue_df)
+        result_df = events_instance.join_assignment_and_revenue(assignment_df, ad_revenue_df)
 
-        assert result_df.count() == 3
+        assert (
+            result_df.select(Schema.REQUEST_ID).distinct().count()
+            == assignment_df.select(Schema.REQUEST_ID).distinct().count()
+        )
+
+        assert result_df.count() == 4
         assert all(
             col in result_df.columns
             for col in [
                 Schema.REQUEST_ID,
                 Schema.USER_ID,
-                Schema.CPM_FLOOR_AD_UNIT_ID,
                 Schema.TOTAL_AMOUNT,
-                Schema.IS_FILLED,
                 Schema.MODEL_ID,
                 Schema.CUSTOMER_ID,
                 Schema.APP_ID,

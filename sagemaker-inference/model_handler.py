@@ -1,7 +1,9 @@
 import json
 import os.path
+import secrets
 
 import joblib
+import numpy as np
 import pandas as pd
 
 
@@ -17,8 +19,14 @@ class ContextualBanditModelHandler(object):
         predict_joblib_path = os.path.join(model_dir, f"{model_tar_extracted_dir}/predictor.joblib")
         print(f"Reading the files from {predict_joblib_path}")
         self.models = joblib.load(predict_joblib_path)
-        self.models = {k.lower(): v for k, v in self.models.items()}
+        self.models = {k.lower(): self.update_rng(v) for k, v in self.models.items()}
         print(f"Totals present, [Models : {len(self.models)}]")
+
+    def update_rng(self, model):
+        base_seed = secrets.randbits(32)
+        ss = np.random.SeedSequence(base_seed)
+        model.rng_exploration, model.rng_shuffle = [np.random.default_rng(s) for s in ss.spawn(2)]
+        return model
 
     def preprocess_single_request(self, body):
         model_id = str(body["modelId"]).lower()

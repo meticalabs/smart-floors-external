@@ -122,6 +122,31 @@ class TestImpressionCount:
         )
         assert sorted(result.valid_values["category"]) == sorted(["A", "B", "C"])
 
+    def test_calculate_impression_count_for_empty_ds(self, model_features, ray_cluster, sample_dataset):
+        trainer = ModelTrainer(
+            customer_id=1,
+            app_id=1,
+            model_id="test_model",
+            date=datetime.datetime.now(),
+            features=model_features,
+            model_config=ModelConfig(
+                **{
+                    "tree_method": "hist",
+                    "objective": "reg:squarederror",
+                    "learning_rate": 0.1,
+                    "max_depth": 4,
+                    "eval_metric": ["rmse", "mae"],
+                    "num_boost_rounds": 10,
+                }
+            ),
+        )
+        empty_dataset = ray.data.from_items([])
+        result = trainer.value_replacer_based_on_impressions(
+            empty_dataset, columns=["category"], min_impressions=2, default_category="default"
+        )
+        assert result.valid_values == {}
+        assert result.default_value == "default"
+
     def test_calculate_impression_count_for_multiple_columns(self, model_features, ray_cluster, sample_dataset):
         trainer = ModelTrainer(
             customer_id=1,
