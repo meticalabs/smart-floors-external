@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import itertools
 import logging
@@ -548,8 +549,12 @@ def read_training_data(
 
 class Predictor(BaseModel):
     epsilon: float
-    rng_exploration: SkipValidation[np.random.Generator] = dataclasses.field(default_factory=lambda: np.random.default_rng())
-    rng_shuffle: SkipValidation[np.random.Generator] = dataclasses.field(default_factory=lambda: np.random.default_rng())
+    rng_exploration: SkipValidation[np.random.Generator] = dataclasses.field(
+        default_factory=lambda: np.random.default_rng()
+    )
+    rng_shuffle: SkipValidation[np.random.Generator] = dataclasses.field(
+        default_factory=lambda: np.random.default_rng()
+    )
     clf: SkipValidation[xgboost.Booster] | None = None
     value_replacer: ValueReplacer | None = None
     features: Features | None = None
