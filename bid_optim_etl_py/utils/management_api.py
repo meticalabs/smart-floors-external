@@ -1,7 +1,8 @@
-from typing import List
+import dataclasses
+from typing import List, Any
 
 import requests
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pydantic.dataclasses import dataclass
 
 
@@ -14,13 +15,19 @@ class Context:
 @dataclass
 class ETLConfig:
     context: List[Context]
-    lookbackWindowInDays: int
+    lookbackWindowInDays: int = dataclasses.field(default=30)
+
+    @field_validator("context", mode="after")
+    @classmethod
+    def min_context_length(cls, context: Any) -> Any:
+        if not context:
+            raise ValueError("Context must contain at least one item.")
+        return context
 
 
 @dataclass
 class ModelConfig:
-    modelId: str
-    parameters: dict
+    parameters: dict = dataclasses.field(default_factory=dict)
 
 
 @dataclass

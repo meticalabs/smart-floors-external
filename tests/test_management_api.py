@@ -2,7 +2,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bid_optim_etl_py.utils.management_api import BidFloorManagementAPI, HttpClient, ETLConfig, ModelConfig
+from bid_optim_etl_py.utils import management_api
+from bid_optim_etl_py.utils.management_api import BidFloorManagementAPI, HttpClient, ETLConfig, ModelConfig, Context
 
 
 @pytest.fixture
@@ -34,7 +35,6 @@ def test_fetch_etl_config(api, mock_http_client):
 
 def test_fetch_model_config(api, mock_http_client):
     mock_response_data = {
-        "modelId": "test_model",
         "parameters": {"param1": "value1", "param2": "value2"},
     }
     mock_http_client.get.return_value.json.return_value = mock_response_data
@@ -42,7 +42,23 @@ def test_fetch_model_config(api, mock_http_client):
     model_config = api.fetch_model_config(app_id=100, model_id="test_model")
 
     assert isinstance(model_config, ModelConfig)
-    assert model_config.modelId == "test_model"
     assert model_config.parameters["param1"] == "value1"
     assert model_config.parameters["param2"] == "value2"
     mock_http_client.get.assert_called_once_with("/bidfloor/app/100/model/test_model")
+
+
+def test_empty_etl_config_look_back():
+    etl_config = ETLConfig(**{"context": [Context(name="default", dataType="string")]})
+    assert etl_config.lookbackWindowInDays == 30
+    assert len(etl_config.context) == 1
+
+
+def test_all_empty_to_throw_error():
+    with pytest.raises(ValueError, match="Context must contain at least one item."):
+        ETLConfig(**{"context": []})
+
+
+def test_empty_model_config():
+    model_config = management_api.ModelConfig()
+    assert isinstance(model_config, management_api.ModelConfig)
+    assert model_config.parameters == {}
