@@ -237,7 +237,7 @@ def fill_with_cached_context(assignment_df: DataFrame) -> DataFrame:
     assignment_df = assignment_df.withColumn(
         is_new_group,
         F.when(
-            (col(Schema.INFERENCE_DATA).isNotNull())
+            (col(Schema.INFERENCE_DATA).isNotNull() | ~(col(Schema.INFERENCE_DATA).eqNullSafe("null")))
             | (F.lag(Schema.USER_ID, 1).over(window_spec) != col(Schema.USER_ID))
             | (F.lag(Schema.CPM_FLOOR_AD_UNIT_IDS, 1).over(window_spec) != col(Schema.CPM_FLOOR_AD_UNIT_IDS))
             | (F.lag(Schema.CPM_FLOOR_VALUES, 1).over(window_spec) != col(Schema.CPM_FLOOR_VALUES)),
