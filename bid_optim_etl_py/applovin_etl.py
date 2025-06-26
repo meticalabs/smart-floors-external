@@ -275,7 +275,7 @@ def extract_events(spark: SparkSession, logger: logging.Logger, parsed_args_obj:
         ),
     )
 
-    assignments = events.fetch_assignment_events()
+    assignments = fill_with_cached_context(events.fetch_assignment_events())
     ad_revenue_df = events.fetch_revenue_events()
 
     if assignments.isEmpty() or ad_revenue_df.isEmpty():
