@@ -12,7 +12,7 @@ from pyspark.sql import Row
 from pyspark.sql.functions import date_format, col
 from pyspark.sql.types import StructType, StructField, TimestampType, ArrayType, DoubleType, StringType, BooleanType
 
-from bid_optim_etl_py.applovin_etl import Events, Schema
+from bid_optim_etl_py.applovin_etl import Events, Schema, fill_with_cached_context
 from bid_optim_etl_py.cfg_parser import ConfigFile
 from bid_optim_etl_py.utils.management_api import ETLConfig
 
