@@ -651,7 +651,13 @@ class Predictor(BaseModel):
             with_hardcoded_context = self.add_hardcoded_contexts(context, ad_unit_list)
             transformed.append(with_hardcoded_context.to_dict())
 
-        feature_dmatrix = self.features.fields_to_dmatrix_from_df(pd.DataFrame(transformed), prediction_phase=True)
+        value_replaced = (
+            self.value_replacer.transform(pd.DataFrame(transformed))
+            if self.value_replacer
+            else pd.DataFrame(transformed)
+        )
+
+        feature_dmatrix = self.features.fields_to_dmatrix_from_df(value_replaced, prediction_phase=True)
         predictions_array = self.clf.predict(feature_dmatrix)
         prediction_estimates = [
             {

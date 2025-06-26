@@ -2,14 +2,14 @@ import json
 import os
 import random
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest import mock
 
 import pandas as pd
 import pytest
 from etl_py_commons.cfg_parser import ConfigParser
 from pyspark.sql import Row
-from pyspark.sql.functions import date_format
+from pyspark.sql.functions import date_format, col
 from pyspark.sql.types import StructType, StructField, TimestampType, ArrayType, DoubleType, StringType, BooleanType
 
 from bid_optim_etl_py.applovin_etl import Events, Schema
@@ -217,7 +217,7 @@ class TestApplovinETL:
 
         # fmt:off
         context_data = spark.createDataFrame([
-            Row(context=json.dumps({k: v for k, v in {
+            Row(id=i, context=json.dumps({k: v for k, v in {
                 "user.country": random.choice([None, "US", "IN", "UK"]),
                 "user.languageCode": random.choice([None, "en", "fr", "es"]),
                 "user.deviceType": random.choice([None, "mobile", "tablet"]),
@@ -229,16 +229,21 @@ class TestApplovinETL:
                 "user.avgRevenueLast72Hours": random.choice([None, 0.0, 1.0, 2.0]),
                 "user.mostRecentAdRevenue": random.choice([None, 0.0, 1.0, 2.0]),
             }.items() if v is not None}))
-            for _ in range(data_size)
+            for i in range(data_size)
         ])
 
         assignment_data = spark.createDataFrame([
-            Row(requestId=str(uuid.uuid4()), userId=str(uuid.uuid4()),
-                eventTime="2023-01-01T00:00:00Z",
+            Row(id=i, requestId=str(uuid.uuid4()), userId=str(uuid.uuid4()),
+                eventTime=datetime(2023, 1, 1, 0, 0, 0) +
+                          timedelta(hours=random.randint(0, 23),
+                                    minutes=random.randint(0, 59),
+                                    seconds=random.randint(0, 59)),
                 modelId=random.choice(["android_inter", "ios_inter"]),
                 placementTag="tag1", sessionId="",
                 eventType="meticaBidFloorAssignment",
                 customerId=123, appId=456,
+                inferenceData=json.dumps(random.choice([{"inferenceEndpoint":"value1","model":"model_file.tar.gz"}
+                                                           , {}])),
                 cpmFloorAdUnitIds=random.choices(
                     ["ad_unit_1", "ad_unit_2", "ad_unit_3", "ad_unit_4",
                      "ad_unit_5"], k=3),
@@ -246,10 +251,10 @@ class TestApplovinETL:
                 assignmentHourOfDay=random.choice([None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
                                                    15, 16, 17, 18, 19, 20, 21, 22, 23]),
                 assignmentDayOfWeek=random.choice([None, 1, 2, 3, 4, 5, 6, 7]),
-                propensity=0.5, inferenceData="{}",
-                date=datetime(2023, 1, 1).date()) for _ in range(data_size)])
+                propensity=0.5,
+                date=datetime(2023, 1, 1).date()) for i in range(data_size)])
         # fmt:on
-        return assignment_data.join(context_data)
+        return assignment_data.join(context_data, on="id").drop("id")
 
     def test_denormalise_context_field(self, config, spark, events_instance, assignment_data_with_complex_context):
         df = events_instance.denormalise_context_field(
@@ -411,3 +416,337 @@ class TestApplovinETL:
 
         filtered_df = df.filter(df.isFilled & (df.date <= events_instance.date.isoformat()))
         assert filtered_df.count() == 1
+
+    def test_fill_with_cached_context(self, assignment_data_with_complex_context):
+        filled_context_data = fill_with_cached_context(assignment_data_with_complex_context)
+        filled_context_data.show(100, truncate=False)
+
+    def test_fill_with_cached_context_handles_empty_dataframe(self, spark):
+        empty_df = spark.createDataFrame([], schema=StructType([]))
+        result_df = fill_with_cached_context(empty_df)
+        assert result_df.isEmpty()
+
+    def test_fill_with_cached_context_handles_single_row(self, spark):
+        schema = StructType(
+            [
+                StructField(Schema.USER_ID, StringType(), True),
+                StructField(Schema.CPM_FLOOR_AD_UNIT_IDS, ArrayType(StringType()), True),
+                StructField(Schema.CPM_FLOOR_VALUES, ArrayType(DoubleType()), True),
+                StructField(Schema.EVENT_TIME, StringType(), True),
+                StructField(Schema.INFERENCE_DATA, StringType(), True),
+                StructField(Schema.CONTEXT, StringType(), True),
+            ]
+        )
+        data = [
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T00:00:00Z",
+                context="{}",
+                inferenceData="{}",
+            )
+        ]
+        df = spark.createDataFrame(data, schema=schema)
+        result_df = fill_with_cached_context(df)
+        assert result_df.count() == 1
+        assert result_df.select(Schema.CONTEXT).collect()[0][0] == "{}"
+
+    def test_fill_with_cached_context_handles_multiple_rows_with_same_group(self, spark):
+        schema = StructType(
+            [
+                StructField(Schema.USER_ID, StringType(), True),
+                StructField(Schema.CPM_FLOOR_AD_UNIT_IDS, ArrayType(StringType()), True),
+                StructField(Schema.CPM_FLOOR_VALUES, ArrayType(DoubleType()), True),
+                StructField(Schema.EVENT_TIME, StringType(), True),
+                StructField(Schema.INFERENCE_DATA, StringType(), True),
+                StructField(Schema.CONTEXT, StringType(), True),
+            ]
+        )
+        data = [
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T00:00:00Z",
+                inferenceData=None,
+                context="{}",
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T01:00:00Z",
+                inferenceData=None,
+                context=None,
+            ),
+        ]
+        df = spark.createDataFrame(data, schema=schema)
+        result_df = fill_with_cached_context(df)
+        assert result_df.count() == 2
+        assert all(row[Schema.CONTEXT] == "{}" for row in result_df.collect())
+
+    def test_fill_with_cached_context_handles_multiple_rows_with_different_groups(self, spark):
+        schema = StructType(
+            [
+                StructField(Schema.USER_ID, StringType(), True),
+                StructField(Schema.CPM_FLOOR_AD_UNIT_IDS, ArrayType(StringType()), True),
+                StructField(Schema.CPM_FLOOR_VALUES, ArrayType(DoubleType()), True),
+                StructField(Schema.EVENT_TIME, StringType(), True),
+                StructField(Schema.INFERENCE_DATA, StringType(), True),
+                StructField(Schema.CONTEXT, StringType(), True),
+            ]
+        )
+        data = [
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T00:00:00Z",
+                inferenceData=None,
+                context="{}",
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_2"],
+                cpmFloorValues=[2.0],
+                eventTime="2023-01-01T01:00:00Z",
+                inferenceData=None,
+                context=None,
+            ),
+        ]
+        df = spark.createDataFrame(data, schema=schema)
+        result_df = fill_with_cached_context(df)
+        assert result_df.count() == 2
+        assert (
+            result_df.filter(col(Schema.CPM_FLOOR_AD_UNIT_IDS).getItem(0) == "ad_unit_1")
+            .select(Schema.CONTEXT)
+            .collect()[0][0]
+            == "{}"
+        )
+        assert (
+            result_df.filter(col(Schema.CPM_FLOOR_AD_UNIT_IDS).getItem(0) == "ad_unit_2")
+            .select(Schema.CONTEXT)
+            .collect()[0][0]
+            is None
+        )
+
+    def test_fill_with_cached_context_handles_unique_context_per_group(self, spark):
+        schema = StructType(
+            [
+                StructField(Schema.USER_ID, StringType(), True),
+                StructField(Schema.CPM_FLOOR_AD_UNIT_IDS, ArrayType(StringType()), True),
+                StructField(Schema.CPM_FLOOR_VALUES, ArrayType(DoubleType()), True),
+                StructField(Schema.EVENT_TIME, StringType(), True),
+                StructField(Schema.INFERENCE_DATA, StringType(), True),
+                StructField(Schema.CONTEXT, StringType(), True),
+            ]
+        )
+        data = [
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T00:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value1"}),
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T01:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value2"}),
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_2"],
+                cpmFloorValues=[2.0],
+                eventTime="2023-01-01T02:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value3"}),
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_2"],
+                cpmFloorValues=[2.0],
+                eventTime="2023-01-01T03:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value4"}),
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_3"],
+                cpmFloorValues=[3.0],
+                eventTime="2023-01-01T04:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value5"}),
+            ),
+            Row(
+                userId="U2",
+                cpmFloorAdUnitIds=["ad_unit_4"],
+                cpmFloorValues=[4.0],
+                eventTime="2023-01-02T00:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value6"}),
+            ),
+            Row(
+                userId="U2",
+                cpmFloorAdUnitIds=["ad_unit_4"],
+                cpmFloorValues=[4.0],
+                eventTime="2023-01-02T01:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value7"}),
+            ),
+            Row(
+                userId="U2",
+                cpmFloorAdUnitIds=["ad_unit_5"],
+                cpmFloorValues=[5.0],
+                eventTime="2023-01-02T02:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value8"}),
+            ),
+            Row(
+                userId="U2",
+                cpmFloorAdUnitIds=["ad_unit_5"],
+                cpmFloorValues=[5.0],
+                eventTime="2023-01-02T03:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value9"}),
+            ),
+            Row(
+                userId="U2",
+                cpmFloorAdUnitIds=["ad_unit_6"],
+                cpmFloorValues=[6.0],
+                eventTime="2023-01-02T04:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value10"}),
+            ),
+            Row(
+                userId="U3",
+                cpmFloorAdUnitIds=["ad_unit_7"],
+                cpmFloorValues=[7.0],
+                eventTime="2023-01-03T00:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value11"}),
+            ),
+            Row(
+                userId="U3",
+                cpmFloorAdUnitIds=["ad_unit_7"],
+                cpmFloorValues=[7.0],
+                eventTime="2023-01-03T01:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value12"}),
+            ),
+            Row(
+                userId="U3",
+                cpmFloorAdUnitIds=["ad_unit_8"],
+                cpmFloorValues=[8.0],
+                eventTime="2023-01-03T02:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value13"}),
+            ),
+            Row(
+                userId="U3",
+                cpmFloorAdUnitIds=["ad_unit_8"],
+                cpmFloorValues=[8.0],
+                eventTime="2023-01-03T03:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value14"}),
+            ),
+            Row(
+                userId="U3",
+                cpmFloorAdUnitIds=["ad_unit_9"],
+                cpmFloorValues=[9.0],
+                eventTime="2023-01-03T04:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value15"}),
+            ),
+            Row(
+                userId="U4",
+                cpmFloorAdUnitIds=["ad_unit_10"],
+                cpmFloorValues=[10.0],
+                eventTime="2023-01-04T00:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value16"}),
+            ),
+            Row(
+                userId="U4",
+                cpmFloorAdUnitIds=["ad_unit_10"],
+                cpmFloorValues=[10.0],
+                eventTime="2023-01-04T01:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value17"}),
+            ),
+            Row(
+                userId="U4",
+                cpmFloorAdUnitIds=["ad_unit_11"],
+                cpmFloorValues=[11.0],
+                eventTime="2023-01-04T02:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value18"}),
+            ),
+            Row(
+                userId="U4",
+                cpmFloorAdUnitIds=["ad_unit_11"],
+                cpmFloorValues=[11.0],
+                eventTime="2023-01-04T03:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value19"}),
+            ),
+            Row(
+                userId="U4",
+                cpmFloorAdUnitIds=["ad_unit_12"],
+                cpmFloorValues=[12.0],
+                eventTime="2023-01-04T04:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value20"}),
+            ),
+            Row(
+                userId="U5",
+                cpmFloorAdUnitIds=["ad_unit_13"],
+                cpmFloorValues=[13.0],
+                eventTime="2023-01-05T00:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value21"}),
+            ),
+            Row(
+                userId="U5",
+                cpmFloorAdUnitIds=["ad_unit_13"],
+                cpmFloorValues=[13.0],
+                eventTime="2023-01-05T01:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value22"}),
+            ),
+            Row(
+                userId="U5",
+                cpmFloorAdUnitIds=["ad_unit_14"],
+                cpmFloorValues=[14.0],
+                eventTime="2023-01-05T02:00:00Z",
+                inferenceData="{'endpoint':'value1'}",
+                context=json.dumps({"key": "value23"}),
+            ),
+            Row(
+                userId="U5",
+                cpmFloorAdUnitIds=["ad_unit_14"],
+                cpmFloorValues=[14.0],
+                eventTime="2023-01-05T03:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value24"}),
+            ),
+            Row(
+                userId="U5",
+                cpmFloorAdUnitIds=["ad_unit_15"],
+                cpmFloorValues=[15.0],
+                eventTime="2023-01-05T04:00:00Z",
+                inferenceData=None,
+                context=json.dumps({"key": "value25"}),
+            ),
+        ]
+        df = spark.createDataFrame(data, schema=schema)
+        result_df = fill_with_cached_context(df)
+        result_df.show(truncate=False)
+        assert result_df.count() == 25
+        assert len(result_df.select(Schema.CONTEXT).distinct().collect()) == 15
+        assert len(result_df.select(Schema.LIVE_CONTEXT).distinct().collect()) == 25

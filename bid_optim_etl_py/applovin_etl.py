@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from etl_py_commons.job_initialiser import Initialisation
-from pyspark.sql import SparkSession, DataFrame, Column, functions as F
+from pyspark.sql import SparkSession, DataFrame, Column, functions as F, Window
 from pyspark.sql.functions import col, current_timestamp, from_json, hour, coalesce
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 
@@ -22,8 +22,10 @@ class Schema:
     TOTAL_AMOUNT = "totalAmount"
     EVENT_TIME = "eventTime"
     CONTEXT = "context"
+    LIVE_CONTEXT = "liveContext"
     IS_FILLED = "isFilled"
     CPM_FLOOR_AD_UNIT_ID = "cpmFloorAdUnitId"
+    CPM_FLOOR_AD_UNIT_IDS = "cpmFloorAdUnitIds"
     CPM_FLOOR_VALUE = "cpmFloorValue"
     CPM_FLOOR_VALUES = "cpmFloorValues"
     DATE = "date"
@@ -35,6 +37,7 @@ class Schema:
     ASSIGNMENT_DAY_OF_WEEK = "assignmentDayOfWeek"
     HIGHEST_BID_FLOOR_VALUE = "highestBidFloorValue"
     MEDIUM_BID_FLOOR_VALUE = "mediumBidFloorValue"
+    INFERENCE_DATA = "inferenceData"
 
 
 class ApplovinETLException(Exception):
@@ -219,6 +222,43 @@ def _log_start(logger: logging.Logger, args: [str]):
 def _log_complete(logger: logging.Logger, args: [str]):
     logger.info(f"Completed Applovin ETL Runner PySpark job with args: {args}")
 
+def fill_with_cached_context(assignment_df: DataFrame) -> DataFrame:
+    """
+    Fills the assignment DataFrame with cached context values based on the user ID and ad unit IDs.
+    :param assignment_df: DataFrame containing assignment events with user ID, ad unit IDs, and context.
+    :return: DataFrame with filled context values.
+    """
+    if assignment_df.isEmpty():
+        return assignment_df
+    window_spec = Window.partitionBy(Schema.USER_ID, Schema.CPM_FLOOR_AD_UNIT_IDS).orderBy(Schema.EVENT_TIME)
+    is_new_group = "is_new_group"
+    group_id = "group_id"
+
+    assignment_df = assignment_df.withColumn(
+        is_new_group,
+        F.when(
+            (col(Schema.INFERENCE_DATA).isNotNull())
+            | (F.lag(Schema.USER_ID, 1).over(window_spec) != col(Schema.USER_ID))
+            | (F.lag(Schema.CPM_FLOOR_AD_UNIT_IDS, 1).over(window_spec) != col(Schema.CPM_FLOOR_AD_UNIT_IDS))
+            | (F.lag(Schema.CPM_FLOOR_VALUES, 1).over(window_spec) != col(Schema.CPM_FLOOR_VALUES)),
+            1,
+        ).otherwise(0),
+    )
+
+    assignment_df = assignment_df.withColumn(group_id, F.sum(is_new_group).over(window_spec)).withColumnsRenamed(
+        {Schema.CONTEXT: Schema.LIVE_CONTEXT}
+    )
+
+    assignment_df = assignment_df.withColumn(
+        Schema.CONTEXT,
+        F.first(Schema.LIVE_CONTEXT, ignorenulls=True).over(
+            Window.partitionBy(Schema.USER_ID, Schema.CPM_FLOOR_AD_UNIT_IDS, group_id)
+            .orderBy(Schema.EVENT_TIME)
+            .rowsBetween(Window.unboundedPreceding, Window.currentRow)
+        ),
+    )
+
+    return assignment_df.drop(is_new_group, group_id)
 
 def extract_events(spark: SparkSession, logger: logging.Logger, parsed_args_obj: Namespace, config_file: ConfigFile):
     events = Events(
