@@ -19,7 +19,7 @@ def api(mock_http_client):
 
 def test_fetch_etl_config(api, mock_http_client):
     mock_response_data = {
-        "context": [{"name": "example", "dataType": "string"}],
+        "context": [{"path": "example", "dataType": "string"}],
         "lookbackWindowInDays": 7,
     }
     mock_http_client.get.return_value.json.return_value = mock_response_data
@@ -28,7 +28,7 @@ def test_fetch_etl_config(api, mock_http_client):
 
     assert isinstance(etl_config, ETLConfig)
     assert etl_config.lookbackWindowInDays == 7
-    assert etl_config.context[0].name == "example"
+    assert etl_config.context[0].path == "example"
     assert etl_config.context[0].dataType == "string"
     mock_http_client.get.assert_called_once_with("/bidfloor/app/100/config/etl")
 
@@ -48,7 +48,7 @@ def test_fetch_model_config(api, mock_http_client):
 
 
 def test_empty_etl_config_look_back():
-    etl_config = ETLConfig(**{"context": [Context(name="default", dataType="string")]})
+    etl_config = ETLConfig(**{"context": [Context(path="default", dataType="string")]})
     assert etl_config.lookbackWindowInDays == 30
     assert len(etl_config.context) == 1
 

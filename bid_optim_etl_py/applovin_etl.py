@@ -96,7 +96,7 @@ class Events:
             context_schema = StructType(
                 [
                     StructField(
-                        context.name, StringType() if context.dataType.lower() == "string" else DoubleType(), True
+                        context.path, StringType() if context.dataType.lower() == "string" else DoubleType(), True
                     )
                     for context in etl_config.context
                 ]
@@ -222,6 +222,7 @@ def _log_start(logger: logging.Logger, args: [str]):
 def _log_complete(logger: logging.Logger, args: [str]):
     logger.info(f"Completed Applovin ETL Runner PySpark job with args: {args}")
 
+
 def fill_with_cached_context(assignment_df: DataFrame) -> DataFrame:
     """
     Fills the assignment DataFrame with cached context values based on the user ID and ad unit IDs.
@@ -259,6 +260,7 @@ def fill_with_cached_context(assignment_df: DataFrame) -> DataFrame:
     )
 
     return assignment_df.drop(is_new_group, group_id)
+
 
 def extract_events(spark: SparkSession, logger: logging.Logger, parsed_args_obj: Namespace, config_file: ConfigFile):
     events = Events(

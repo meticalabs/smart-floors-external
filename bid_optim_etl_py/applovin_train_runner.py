@@ -151,7 +151,7 @@ class ModelFeatures:
 
         features = Features(
             [
-                Field(name=context.name, dtype=("category" if context.dataType.lower() == "string" else "float32"))
+                Field(name=context.path, dtype=("category" if context.dataType.lower() == "string" else "float32"))
                 for context in self.etl_config.context
             ]
             + mandatory_context_fields

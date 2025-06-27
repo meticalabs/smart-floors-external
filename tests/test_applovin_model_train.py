@@ -23,16 +23,16 @@ def model_object():
         etl_config=ETLConfig(
             **{
                 "context": [
-                    {"name": "user.country", "dataType": "string"},
-                    {"name": "user.languageCode", "dataType": "string"},
-                    {"name": "user.deviceType", "dataType": "string"},
-                    {"name": "user.osVersion", "dataType": "string"},
-                    {"name": "user.deviceModel", "dataType": "string"},
-                    {"name": "user.minRevenueLast24Hours", "dataType": "number"},
-                    {"name": "user.avgRevenueLast24Hours", "dataType": "number"},
-                    {"name": "user.avgRevenueLast48Hours", "dataType": "number"},
-                    {"name": "user.avgRevenueLast72Hours", "dataType": "number"},
-                    {"name": "user.mostRecentAdRevenue", "dataType": "number"},
+                    {"path": "user.country", "dataType": "string"},
+                    {"path": "user.languageCode", "dataType": "string"},
+                    {"path": "user.deviceType", "dataType": "string"},
+                    {"path": "user.osVersion", "dataType": "string"},
+                    {"path": "user.deviceModel", "dataType": "string"},
+                    {"path": "user.minRevenueLast24Hours", "dataType": "number"},
+                    {"path": "user.avgRevenueLast24Hours", "dataType": "number"},
+                    {"path": "user.avgRevenueLast48Hours", "dataType": "number"},
+                    {"path": "user.avgRevenueLast72Hours", "dataType": "number"},
+                    {"path": "user.mostRecentAdRevenue", "dataType": "number"},
                 ],
                 "lookbackWindowInDays": 30,
             }
@@ -83,16 +83,16 @@ class TestImpressionCount:
             etl_config=ETLConfig(
                 **{
                     "context": [
-                        {"name": "user.country", "dataType": "string"},
-                        {"name": "user.languageCode", "dataType": "string"},
-                        {"name": "user.deviceType", "dataType": "string"},
-                        {"name": "user.osVersion", "dataType": "string"},
-                        {"name": "user.deviceModel", "dataType": "string"},
-                        {"name": "user.minRevenueLast24Hours", "dataType": "number"},
-                        {"name": "user.avgRevenueLast24Hours", "dataType": "number"},
-                        {"name": "user.avgRevenueLast48Hours", "dataType": "number"},
-                        {"name": "user.avgRevenueLast72Hours", "dataType": "number"},
-                        {"name": "user.mostRecentAdRevenue", "dataType": "number"},
+                        {"path": "user.country", "dataType": "string"},
+                        {"path": "user.languageCode", "dataType": "string"},
+                        {"path": "user.deviceType", "dataType": "string"},
+                        {"path": "user.osVersion", "dataType": "string"},
+                        {"path": "user.deviceModel", "dataType": "string"},
+                        {"path": "user.minRevenueLast24Hours", "dataType": "number"},
+                        {"path": "user.avgRevenueLast24Hours", "dataType": "number"},
+                        {"path": "user.avgRevenueLast48Hours", "dataType": "number"},
+                        {"path": "user.avgRevenueLast72Hours", "dataType": "number"},
+                        {"path": "user.mostRecentAdRevenue", "dataType": "number"},
                     ],
                     "lookbackWindowInDays": 30,
                 }

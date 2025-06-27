@@ -8,7 +8,7 @@ from pydantic.dataclasses import dataclass
 
 @dataclass
 class Context:
-    name: str
+    path: str
     dataType: str
 
 
