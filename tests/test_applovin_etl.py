@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import uuid
@@ -180,7 +181,7 @@ class TestApplovinETL:
             spark=spark,
             iceberg_catalog="example_catalog",
             region_name="us-east-1",
-            logger=None,
+            logger=logging.getLogger("bid_optim_etl_py.applovin_etl"),
             management_api=mock_management_api,
         )
 
