@@ -452,8 +452,6 @@ class ModelTrainer:
         # Preprocess the dataset
         preprocessed_train_dataset, preprocessed_valid_dataset, _ = self.preprocess_data(train_dataset, valid_dataset)
 
-        print(preprocessed_train_dataset.schema)
-
         # Prepare datasets for training
         datasets = {"train": preprocessed_train_dataset, "train_weights": train_weights}
         if valid_dataset:
@@ -738,9 +736,17 @@ def run():
     config_file = parsed_args_obj.read_config(
         confs_dir_path=os.path.join(os.path.dirname(__file__), "confs"), config_clazz_type=ConfigFile
     )
+    logging.info(
+        f"Starting model training for customer {cmd_line_args.customerId}, app {cmd_line_args.appId}, "
+        f"model {cmd_line_args.modelId} on date {cmd_line_args.date}"
+    )
+
     bid_floor_management_api = BidFloorManagementAPI(http_client=HttpClient(base_url=config_file.managementApiBaseUrl))
     etl_config = bid_floor_management_api.fetch_etl_config(cmd_line_args.appId)
     model_config = bid_floor_management_api.fetch_model_config(cmd_line_args.appId, cmd_line_args.modelId)
+
+    logging.info(f"ETL Config: {etl_config}")
+    logging.info(f"Model Config: {model_config}")
 
     init_ray_cluster()
 

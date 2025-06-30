@@ -91,6 +91,7 @@ class Events:
 
     def fetch_context_schema(self):
         etl_config = self.management_api.fetch_etl_config(app_id=self.app_id)
+        self.logger.info(f"Fetched ETL config for app {self.app_id}: {etl_config}")
         context_schema = StructType([])
         if etl_config.context:
             context_schema = StructType(
@@ -101,6 +102,7 @@ class Events:
                     for context in etl_config.context
                 ]
             )
+            self.logger.info(f"Context schema for app {self.app_id}: {context_schema}")
         else:
             self.logger.warning(f"No context fields found for app {self.app_id}. Using default schema.")
         return context_schema
