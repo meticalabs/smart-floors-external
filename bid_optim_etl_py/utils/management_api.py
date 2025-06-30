@@ -45,9 +45,9 @@ class BidFloorManagementAPI(BaseModel):
     http_client: HttpClient
 
     def fetch_etl_config(self, app_id: int) -> ETLConfig:
-        response = self.http_client.get(f"/bidfloor/app/{app_id}/config/etl")
+        response = self.http_client.get(f"/application/{app_id}/config/etl")
         return ETLConfig(**response.json())
 
     def fetch_model_config(self, app_id: int, model_id: str) -> ModelConfig:
-        response = self.http_client.get(f"/bidfloor/app/{app_id}/model/{model_id}")
+        response = self.http_client.get(f"/application/{app_id}/config/model/{model_id}")
         return ModelConfig(**response.json())
