@@ -30,7 +30,7 @@ def test_fetch_etl_config(api, mock_http_client):
     assert etl_config.lookbackWindowInDays == 7
     assert etl_config.context[0].path == "example"
     assert etl_config.context[0].dataType == "string"
-    mock_http_client.get.assert_called_once_with("/bidfloor/app/100/config/etl")
+    mock_http_client.get.assert_called_once_with("/application/100/config/etl")
 
 
 def test_fetch_model_config(api, mock_http_client):
@@ -44,7 +44,7 @@ def test_fetch_model_config(api, mock_http_client):
     assert isinstance(model_config, ModelConfig)
     assert model_config.parameters["param1"] == "value1"
     assert model_config.parameters["param2"] == "value2"
-    mock_http_client.get.assert_called_once_with("/bidfloor/app/100/model/test_model")
+    mock_http_client.get.assert_called_once_with("/application/100/config/model/test_model")
 
 
 def test_empty_etl_config_look_back():
