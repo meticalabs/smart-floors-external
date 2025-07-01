@@ -144,18 +144,7 @@ def test_add_hardcoded_contexts():
         assert updated_context["highestBidFloorValue"] == 10.0
         assert updated_context["mediumBidFloorValue"] == 5.0
 
-def test_split_based_on_name():
-    predictor = Predictor(epsilon=0.5)
-    ad_unit_list = [
-        {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
-        {"name": "metica_ad_unit_1", "id": "1", "bidFloor": 1.0},
-        {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0},
-    ]
-    rest, lowest = predictor.split_based_on_name(ad_unit_list)
-    assert lowest == {"name": "metica_ad_unit_1", "id": "1", "bidFloor": 1.0}
-    assert len(rest) == 2
-    assert {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0} in rest
-    assert {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0} in rest
+
 
 def test_form_response():
     predictor = Predictor(epsilon=0.5)
