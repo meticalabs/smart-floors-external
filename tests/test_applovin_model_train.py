@@ -266,6 +266,162 @@ class TestImpressionCount:
         for col in expected_columns:
             pd.testing.assert_series_equal(transformed_data[col], expected_data[col], check_dtype=False)
 
+    def test_calculate_impression_count_min_impressions_one(self, model_features, ray_cluster, sample_dataset):
+        trainer = ModelTrainer(
+            customer_id=1,
+            app_id=1,
+            model_id="test_model",
+            date=datetime.datetime.now(),
+            features=model_features,
+            model_config=ModelConfig(
+                **{
+                    "tree_method": "hist",
+                    "objective": "reg:squarederror",
+                    "learning_rate": 0.1,
+                    "max_depth": 4,
+                    "eval_metric": ["rmse", "mae"],
+                    "num_boost_rounds": 10,
+                }
+            ),
+        )
+        result = trainer.value_replacer_based_on_impressions(
+            sample_dataset, columns=["category"], min_impressions=1, default_category="other"
+        )
+        assert sorted(result.valid_values["category"]) == sorted(["A", "B", "C", "D", "E"])
+
+    def test_calculate_impression_count_empty_columns_list(self, model_features, ray_cluster, sample_dataset):
+        trainer = ModelTrainer(
+            customer_id=1,
+            app_id=1,
+            model_id="test_model",
+            date=datetime.datetime.now(),
+            features=model_features,
+            model_config=ModelConfig(
+                **{
+                    "tree_method": "hist",
+                    "objective": "reg:squarederror",
+                    "learning_rate": 0.1,
+                    "max_depth": 4,
+                    "eval_metric": ["rmse", "mae"],
+                    "num_boost_rounds": 10,
+                }
+            ),
+        )
+        result = trainer.value_replacer_based_on_impressions(
+            sample_dataset, columns=[], min_impressions=2, default_category="other"
+        )
+        assert result.valid_values == {}
+
+    def test_calculate_impression_count_non_existent_columns(self, model_features, ray_cluster, sample_dataset):
+        trainer = ModelTrainer(
+            customer_id=1,
+            app_id=1,
+            model_id="test_model",
+            date=datetime.datetime.now(),
+            features=model_features,
+            model_config=ModelConfig(
+                **{
+                    "tree_method": "hist",
+                    "objective": "reg:squarederror",
+                    "learning_rate": 0.1,
+                    "max_depth": 4,
+                    "eval_metric": ["rmse", "mae"],
+                    "num_boost_rounds": 10,
+                }
+            ),
+        )
+        result = trainer.value_replacer_based_on_impressions(
+            sample_dataset, columns=["non_existent_col1", "non_existent_col2"], min_impressions=2, default_category="other"
+        )
+        assert result.valid_values == {}
+
+    def test_calculate_impression_count_single_row_dataset(self, model_features, ray_cluster):
+        trainer = ModelTrainer(
+            customer_id=1,
+            app_id=1,
+            model_id="test_model",
+            date=datetime.datetime.now(),
+            features=model_features,
+            model_config=ModelConfig(
+                **{
+                    "tree_method": "hist",
+                    "objective": "reg:squarederror",
+                    "learning_rate": 0.1,
+                    "max_depth": 4,
+                    "eval_metric": ["rmse", "mae"],
+                    "num_boost_rounds": 10,
+                }
+            ),
+        )
+        single_row_data = [{
+            "category": "A", "adUnitId": "a", "device": "iPhone", "value": 1, "NoneCol": None
+        }]
+        single_row_dataset = ray.data.from_items(single_row_data)
+        result = trainer.value_replacer_based_on_impressions(
+            single_row_dataset, columns=["category", "adUnitId"], min_impressions=1, default_category="other"
+        )
+        assert result.valid_values == {"category": ["A"], "adUnitId": ["a"]}
+
+    def test_calculate_impression_count_all_below_min_impressions(self, model_features, ray_cluster):
+        trainer = ModelTrainer(
+            customer_id=1,
+            app_id=1,
+            model_id="test_model",
+            date=datetime.datetime.now(),
+            features=model_features,
+            model_config=ModelConfig(
+                **{
+                    "tree_method": "hist",
+                    "objective": "reg:squarederror",
+                    "learning_rate": 0.1,
+                    "max_depth": 4,
+                    "eval_metric": ["rmse", "mae"],
+                    "num_boost_rounds": 10,
+                }
+            ),
+        )
+        data = [
+            {"category": "A"},
+            {"category": "B"},
+            {"category": "C"},
+        ]
+        dataset = ray.data.from_items(data)
+        result = trainer.value_replacer_based_on_impressions(
+            dataset, columns=["category"], min_impressions=2, default_category="other"
+        )
+        assert result.valid_values == {}
+
+    def test_calculate_impression_count_with_none_values(self, model_features, ray_cluster):
+        trainer = ModelTrainer(
+            customer_id=1,
+            app_id=1,
+            model_id="test_model",
+            date=datetime.datetime.now(),
+            features=model_features,
+            model_config=ModelConfig(
+                **{
+                    "tree_method": "hist",
+                    "objective": "reg:squarederror",
+                    "learning_rate": 0.1,
+                    "max_depth": 4,
+                    "eval_metric": ["rmse", "mae"],
+                    "num_boost_rounds": 10,
+                }
+            ),
+        )
+        data = [
+            {"category": "A"},
+            {"category": None},
+            {"category": "A"},
+            {"category": None},
+            {"category": "B"},
+        ]
+        dataset = ray.data.from_items(data)
+        result = trainer.value_replacer_based_on_impressions(
+            dataset, columns=["category"], min_impressions=2, default_category="other"
+        )
+        assert sorted(result.valid_values["category"], key=lambda x: (x is None, '' if x is None else x)) == sorted(["A", None], key=lambda x: (x is None, '' if x is None else x))
+
 
 class TestFeatures:
     def test_feature_assembler(self, model_object):
@@ -287,6 +443,50 @@ class TestFeatures:
         df = model_object.features.assemble_fields_from_df(pd.DataFrame({}))
         assert df is not None
         assert df.shape == (1, 15)
+
+
+class TestModelTrainerUtilities:
+    @pytest.fixture
+    def trainer_instance(self):
+        # Create a dummy ModelTrainer instance for testing get_weights
+        return ModelTrainer(
+            customer_id=1,
+            app_id=1,
+            model_id="test_model",
+            date=datetime.datetime.now(),
+            features=Features(),  # Dummy Features instance
+            model_config=ModelConfig(),  # Dummy ModelConfig instance
+        )
+
+    def test_get_weights_with_valid_data(self, trainer_instance):
+        data = {"propensity": [0.5, 0.2, 0.8], "feature1": [1, 2, 3]}
+        dataset = ray.data.from_pandas(pd.DataFrame(data))
+        train_weights, valid_weights = trainer_instance.get_weights(dataset, dataset)
+
+        expected_weights = [2.0, 5.0, 1.25]
+
+        # Check train_weights
+        train_weights_list = train_weights.to_pandas()["propensity"].tolist()
+        np.testing.assert_allclose(train_weights_list, expected_weights)
+
+        # Check valid_weights
+        valid_weights_list = valid_weights.to_pandas()["propensity"].tolist()
+        np.testing.assert_allclose(valid_weights_list, expected_weights)
+
+    def test_get_weights_with_empty_dataset(self, trainer_instance):
+        empty_dataset = ray.data.from_items([])
+        train_weights, valid_weights = trainer_instance.get_weights(empty_dataset, empty_dataset)
+
+        assert train_weights.count() == 0
+        assert valid_weights.count() == 0
+
+    def test_get_weights_without_propensity_column(self, trainer_instance):
+        data = {"feature1": [1, 2, 3], "feature2": ["A", "B", "C"]}
+        dataset = ray.data.from_pandas(pd.DataFrame(data))
+        train_weights, valid_weights = trainer_instance.get_weights(dataset, dataset)
+
+        assert train_weights.count() == 0
+        assert valid_weights.count() == 0
 
 
 class TestModelTrainingRun:

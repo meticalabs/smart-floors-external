@@ -43,12 +43,16 @@ class ValueReplacer:
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         for column, valid_vals in self.valid_values.items():
             if column in df.columns:
-                if isinstance(df[column], pd.CategoricalDtype):
+                # Ensure categorical dtype can hold default_value if it's not already there
+                if isinstance(df[column].dtype, pd.CategoricalDtype):
                     if self.default_value not in df[column].cat.categories:
                         df[column] = df[column].cat.add_categories([self.default_value])
-                df[column] = df[column].apply(lambda x: self.default_value if x not in valid_vals else x)
+                
+                # Replace values not in valid_vals with default_value
+                df.loc[~df[column].isin(valid_vals), column] = self.default_value
             else:
-                df[column] = [self.default_value] * len(df)
+                # If column doesn't exist, create it with default_value
+                df[column] = self.default_value
         return df
 
 
@@ -254,22 +258,32 @@ class ModelTrainer:
             based on the minimum impressions and the default replacement category.
         """
         features_with_min_impressions = {}
-        if dataset.count() != 0:
+        if dataset.count() == 0:
+            return ValueReplacer(valid_values={}, default_value=default_category)
+
+        # Create a dataset of (column_name, value) pairs for all relevant columns
+        long_ds = dataset.map_batches(
+            lambda df: df[[col for col in columns if col in df.columns]].melt(var_name="column_name", value_name="value"),
+            batch_format="pandas",
+        )
+
+        # Group by column_name and value, then count
+        counts_ds = long_ds.groupby(["column_name", "value"]).count()
+
+        # Filter based on min_impressions
+        filtered_counts_ds = counts_ds.filter(lambda x: x["count()"] >= min_impressions)
+
+        # Collect the results
+        all_counts = filtered_counts_ds.to_pandas()
+
+        if not all_counts.empty:
             for col in columns:
-                if col not in dataset.columns():
-                    continue
-                ds = (
-                    dataset.groupby(col)
-                    .count()
-                    .rename_columns({"count()": "count"})
-                    .filter(lambda x: x["count"] >= min_impressions)
-                )
-                if ds.count() == 0:
-                    continue
-                values_with_min_impressions = ds.select_columns([col]).to_pandas()[col].tolist()
-                features_with_min_impressions[col] = sorted(
-                    list(set(values_with_min_impressions)), key=lambda x: (x is None, x)
-                )
+                # Filter for the current column
+                col_values = all_counts[all_counts["column_name"] == col]["value"].tolist()
+                if col_values:
+                    features_with_min_impressions[col] = sorted(
+                        list(set(col_values)), key=lambda x: (x is None, x)
+                    )
 
         return ValueReplacer(valid_values=features_with_min_impressions, default_value=default_category)
 
@@ -364,14 +378,10 @@ class ModelTrainer:
         )
 
         # Perform 1 / self.weight_column to get the inverse of the weights
-        def inverse_propensity(df: pd.DataFrame) -> pd.DataFrame:
-            df[self.weight_column] = 1 / df[self.weight_column]
-            return df
-
-        if train_weights.limit(1).count() > 0:
-            train_weights = train_weights.map_batches(inverse_propensity, batch_format="pandas")
-        if valid_weights.limit(1).count() > 0:
-            valid_weights = valid_weights.map_batches(inverse_propensity, batch_format="pandas")
+        if train_weights.count() > 0:
+            train_weights = train_weights.map(lambda x: {self.weight_column: 1 / x[self.weight_column]})
+        if valid_weights.count() > 0:
+            valid_weights = valid_weights.map(lambda x: {self.weight_column: 1 / x[self.weight_column]})
 
         return train_weights, valid_weights
 
