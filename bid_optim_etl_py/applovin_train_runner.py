@@ -47,7 +47,7 @@ class ValueReplacer:
                 if isinstance(df[column].dtype, pd.CategoricalDtype):
                     if self.default_value not in df[column].cat.categories:
                         df[column] = df[column].cat.add_categories([self.default_value])
-                
+
                 # Replace values not in valid_vals with default_value
                 df.loc[~df[column].isin(valid_vals), column] = self.default_value
             else:
@@ -263,7 +263,9 @@ class ModelTrainer:
 
         # Create a dataset of (column_name, value) pairs for all relevant columns
         long_ds = dataset.map_batches(
-            lambda df: df[[col for col in columns if col in df.columns]].melt(var_name="column_name", value_name="value"),
+            lambda df: df[[col for col in columns if col in df.columns]].melt(
+                var_name="column_name", value_name="value"
+            ),
             batch_format="pandas",
         )
 
@@ -281,9 +283,7 @@ class ModelTrainer:
                 # Filter for the current column
                 col_values = all_counts[all_counts["column_name"] == col]["value"].tolist()
                 if col_values:
-                    features_with_min_impressions[col] = sorted(
-                        list(set(col_values)), key=lambda x: (x is None, x)
-                    )
+                    features_with_min_impressions[col] = sorted(list(set(col_values)), key=lambda x: (x is None, x))
 
         return ValueReplacer(valid_values=features_with_min_impressions, default_value=default_category)
 

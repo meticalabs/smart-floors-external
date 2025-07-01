@@ -118,7 +118,8 @@ def test_predict_exploration_path():
 
     # There are 3 possible combinations of 2 from 3 (excluding the lowest): (4,3), (4,2), (3,2)
     # The lowest bid floor is 1.0, so we consider 4,3,2. Combinations are (4,3), (4,2), (3,2)
-    # If we choose [1,2] from the original floors_data, it means we chose the first two elements after sorting by postfix desc.
+    # If we choose [1,2] from the original floors_data, it means we chose the first two elements
+    # after sorting by postfix desc.
     # The combinations are (4,3), (4,2), (3,2)
     # If we choose [floors_data[0], floors_data[1]] which are 4 and 3, then the propensity should be 1/3.
     assert result["cpmFloorAdUnitIds"] == ["1", "2", "1"]
