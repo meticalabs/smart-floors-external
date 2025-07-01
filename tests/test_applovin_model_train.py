@@ -572,3 +572,46 @@ class TestModelTrainingRun:
             drop_columns=["propensity"],
             expected_values=[0.159874, 0.2, 0.240126],
         )
+
+    def test_run_with_empty_training_data(self, model_object):
+        empty_dataset = ray.data.from_items([])
+        result, value_replacer, features = model_object.run(
+            empty_dataset, target_column="totalAmount", use_validation_set=True
+        )
+        assert result is None
+        assert value_replacer.valid_values == {}
+        assert features == model_object.features
+
+    def test_dynamic_num_workers_edge_cases(self, model_object):
+        # Set a smaller min_rows_per_worker for faster testing
+        min_rows_per_worker_test = 10
+
+        # Test with a very small dataset (less than min_rows_per_worker)
+        small_data = [{"col1": 1}]
+        small_dataset = ray.data.from_items(small_data)
+        num_workers_small = model_object.dynamic_num_workers(small_dataset, min_rows_per_worker=min_rows_per_worker_test)
+        assert num_workers_small == 1  # Should always be at least 1 worker
+
+        # Test with a dataset slightly larger than min_rows_per_worker
+        medium_data = [{"col1": i} for i in range(min_rows_per_worker_test + 1)]
+        medium_dataset = ray.data.from_items(medium_data)
+        num_workers_medium = model_object.dynamic_num_workers(medium_dataset, min_rows_per_worker=min_rows_per_worker_test)
+        assert num_workers_medium == 1  # Should be 1 worker for (min_rows_per_worker_test + 1) rows
+
+        # Test with a dataset large enough for multiple workers (e.g., 2x min_rows_per_worker)
+        large_data = [{"col1": i} for i in range(min_rows_per_worker_test * 2)]
+        large_dataset = ray.data.from_items(large_data)
+        # Mock ray.cluster_resources() to control available CPUs for predictable testing
+        original_cluster_resources = ray.cluster_resources
+        ray.cluster_resources = lambda: {"CPU": 4}
+        num_workers_large = model_object.dynamic_num_workers(large_dataset, min_rows_per_worker=min_rows_per_worker_test)
+        assert num_workers_large == 2  # Should be 2 workers for 2x min_rows_per_worker_test rows with 4 CPUs
+        ray.cluster_resources = original_cluster_resources # Restore original
+
+        # Test with a dataset that would result in more workers than available CPUs
+        very_large_data = [{"col1": i} for i in range(min_rows_per_worker_test * 5)]
+        very_large_dataset = ray.data.from_items(very_large_data)
+        ray.cluster_resources = lambda: {"CPU": 4}
+        num_workers_very_large = model_object.dynamic_num_workers(very_large_dataset, min_rows_per_worker=min_rows_per_worker_test)
+        assert num_workers_very_large == 4  # Should be capped by available CPUs
+        ray.cluster_resources = original_cluster_resources # Restore original

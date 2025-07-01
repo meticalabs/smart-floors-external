@@ -1,5 +1,5 @@
 import datetime
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 from bid_optim_etl_py.applovin_train_runner import Predictor, Features, Field, ValueReplacer
@@ -101,41 +101,77 @@ def test_sort_assignment_by_ad_unit_name(assignments, expected_sorted):
     assert sorted_assignments == expected_sorted
 
 
-def test_predicts_random_assignment_when_model_is_not_trained():
+def test_predict_exploration_path():
+    # Test when clf is None, ensuring random assignment and correct propensity
     predictor = Predictor(epsilon=0.5)
-
     context = pd.Series({"user.country": "US"})
-    floors = [
+    floors_data = [
         {"name": "metica_ad_unit_1", "id": "1", "bidFloor": 1.0},
         {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0},
         {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
+        {"name": "metica_ad_unit_4", "id": "4", "bidFloor": 4.0},
     ]
-    result = predictor.predict(context, floors)  # Only one possible assignment
-    assert result == {
-        "cpmFloorAdUnitIds": ["3", "2", "1"],
-        "cpmFloorValues": [3.0, 2.0, 1.0],
-        "propensity": 1,
-        "estimates": [
-            {
-                "adUnitIds": [
-                    {"bidFloor": 3.0, "id": "3", "name": "metica_ad_unit_3"},
-                    {"bidFloor": 2.0, "id": "2", "name": "metica_ad_unit_2"},
-                ],
-                "predictedBidFloor": -1.0,
-            }
-        ],
-    }
+    # Mock rng_exploration to return a predictable random choice
+    predictor.rng_exploration = Mock()
+    predictor.rng_exploration.choice.return_value = [[floors_data[0], floors_data[1]]]
+    result = predictor.predict(context, floors_data)
 
-    predictor = Predictor(epsilon=0.5)  # resetting the predictor test with new floors
-    context = pd.Series({"user.country": "US"})
-    floors = [
+    # There are 3 possible combinations of 2 from 3 (excluding the lowest): (4,3), (4,2), (3,2)
+    # The lowest bid floor is 1.0, so we consider 4,3,2. Combinations are (4,3), (4,2), (3,2)
+    # If we choose [1,2] from the original floors_data, it means we chose the first two elements after sorting by postfix desc.
+    # The combinations are (4,3), (4,2), (3,2)
+    # If we choose [floors_data[0], floors_data[1]] which are 4 and 3, then the propensity should be 1/3.
+    assert result["cpmFloorAdUnitIds"] == ["1", "2", "1"]
+    assert result["cpmFloorValues"] == [1.0, 2.0, 1.0]
+    assert pytest.approx(result["propensity"], abs=1e-6) == 1 / 3.0
+    assert result["estimates"][0]["predictedBidFloor"] == -1.0
+
+def test_add_hardcoded_contexts():
+    predictor = Predictor(epsilon=0.5)
+    context = pd.Series({"existing_key": "existing_value"})
+    bid_floor_adunit = [{"bidFloor": 10.0}, {"bidFloor": 5.0}]
+    
+    # Mock datetime.datetime.now to ensure consistent test results
+    with patch('bid_optim_etl_py.applovin_train_runner.datetime') as mock_datetime:
+        mock_datetime.datetime.now.return_value = datetime.datetime(2025, 7, 1, 10, 30, 0, tzinfo=datetime.timezone.utc)
+
+        updated_context = predictor.add_hardcoded_contexts(context, bid_floor_adunit)
+
+        assert updated_context["existing_key"] == "existing_value"
+        assert updated_context["assignmentDayOfWeek"] == 1 # Tuesday
+        assert updated_context["assignmentHourOfDay"] == 10
+        assert updated_context["highestBidFloorValue"] == 10.0
+        assert updated_context["mediumBidFloorValue"] == 5.0
+
+def test_split_based_on_name():
+    predictor = Predictor(epsilon=0.5)
+    ad_unit_list = [
+        {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
         {"name": "metica_ad_unit_1", "id": "1", "bidFloor": 1.0},
         {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0},
-        {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
-        {"name": "metica_ad_unit_4", "id": "3", "bidFloor": 3.0},
     ]
-    result = predictor.predict(context, floors)
-    assert pytest.approx(result["propensity"], abs=1e-6) == 0.3333333333333333
+    rest, lowest = predictor.split_based_on_name(ad_unit_list)
+    assert lowest == {"name": "metica_ad_unit_1", "id": "1", "bidFloor": 1.0}
+    assert len(rest) == 2
+    assert {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0} in rest
+    assert {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0} in rest
+
+def test_form_response():
+    predictor = Predictor(epsilon=0.5)
+    assignments = [
+        {"id": "A", "bidFloor": 10.0},
+        {"id": "B", "bidFloor": 20.0},
+    ]
+    lowest_bid_floor = {"id": "C", "bidFloor": 5.0}
+    propensity = 0.75
+    prediction_estimates = [{"adUnitIds": ["A", "B"], "predictedBidFloor": 15.0}]
+
+    response = predictor.form_response(assignments, lowest_bid_floor, propensity, prediction_estimates)
+
+    assert response["cpmFloorAdUnitIds"] == ["A", "B", "C"]
+    assert response["cpmFloorValues"] == [10.0, 20.0, 5.0]
+    assert response["propensity"] == propensity
+    assert response["estimates"] == prediction_estimates
 
 
 def test_empty_floors_throws_exception():

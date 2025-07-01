@@ -441,6 +441,10 @@ class ModelTrainer:
             default_category="other",
         )
 
+        # If the dataset is empty, return early
+        if assignments_with_ad_revenue.count() == 0:
+            return None, value_replacer, self.features
+
         # Transform the dataset
         transformed_ds = assignments_with_ad_revenue.map_batches(value_replacer.transform, batch_format="pandas")
 
