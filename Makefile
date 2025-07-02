@@ -22,7 +22,7 @@ install: uv ## Install dependencies
 
 .PHONY: test
 test:  ## Run tests
-	uv run pytest
+	uv run pytest -n auto
 
 .PHONY: ruff
 ruff:  ## Run linters

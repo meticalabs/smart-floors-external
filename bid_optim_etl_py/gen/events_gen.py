@@ -94,7 +94,9 @@ class EventNames:
     APPLOVIN_BID_FLOOR = "applovin_bid_floor"
     ESTIMATED_AD_REVENUE = "estimated_ad_revenue"
 
+
 ad_units = ["ad_unit_1", "ad_unit_2", "ad_unit_3", "ad_unit_4", "ad_unit_5"]
+
 
 def generate_random_data(
     customer_id, app_id, num_records, event_type, request_id_user_time_map, full_set=False, bid_only=False
@@ -192,7 +194,6 @@ def arg_parser(args):
 
 def run(spark: SparkSession, args: [str]):
     try:
-
         parsed_args = arg_parser(args)
         customer_id = parsed_args.customerId
         app_id = parsed_args.appId
