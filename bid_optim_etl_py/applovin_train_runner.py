@@ -202,7 +202,13 @@ class ModelTrainer:
 
     def prepare_data(self, input_data: ray.data.Dataset, target_column: str) -> Tuple[Dataset, Dataset, Dataset]:
         """Load and split the dataset into train, validation, and test sets."""
-        train_dataset, valid_dataset = input_data.train_test_split(test_size=0.3)
+        if input_data.count() == 0:
+            raise ValueError("Input dataset is empty. Cannot perform train-test split.")
+        elif input_data.count() == 1:
+            train_dataset = input_data
+            valid_dataset = input_data.limit(0)  # Empty dataset
+        else:
+            train_dataset, valid_dataset = input_data.train_test_split(test_size=0.3)
         test_dataset = valid_dataset.drop_columns([target_column])
         return train_dataset, valid_dataset, test_dataset
 
