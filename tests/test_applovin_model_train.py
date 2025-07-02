@@ -585,6 +585,22 @@ class TestModelTrainingRun:
         assert value_replacer.valid_values == {}
         assert features == model_object.features
 
+    def test_run_with_single_record_training_data(self, model_object):
+        single_record_data = ray.data.from_items([{"user.country": "US", "totalAmount": 0.1}])
+        result, value_replacer, features = model_object.run(
+            single_record_data, target_column="totalAmount", use_validation_set=True
+        )
+        # When only one record, it should all go to training, and validation should be empty
+        train_dataset, valid_dataset, test_dataset = model_object.prepare_data(single_record_data, "totalAmount")
+        assert train_dataset.count() == 1
+        assert valid_dataset.count() == 0
+        assert test_dataset.count() == 0 # test_dataset is derived from valid_dataset, so it should also be empty
+
+    def test_prepare_data_with_empty_dataset(self, model_object):
+        empty_dataset = ray.data.from_items([])
+        with pytest.raises(ValueError, match="Input dataset is empty. Cannot perform train-test split."):
+            model_object.prepare_data(empty_dataset, "totalAmount")
+
     def test_dynamic_num_workers_edge_cases(self, model_object):
         # Set a smaller min_rows_per_worker for faster testing
         min_rows_per_worker_test = 10
