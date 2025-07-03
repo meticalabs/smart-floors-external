@@ -770,7 +770,7 @@ def run():
     create_empty_model = True
     if model_config and model_config.parameters:
         epsilon = model_config.parameters.get("epsilon", 0.1)
-        create_empty_model = model_config.parameters.get("createEmptyModel", True)
+        create_empty_model = model_config.parameters.get("create_empty_model", True)
 
     init_ray_cluster()
 
