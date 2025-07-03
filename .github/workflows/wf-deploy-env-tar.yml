@@ -16,6 +16,22 @@ on:
         options:
           - us-east-1
           - eu-west-1
+      bid_floor_model_version:
+        required: false
+        description: 'Bid Floor Model version to use for installation'
+        default: 'latest'
+      image_tag_postfix:
+        required: false
+        description: 'Docker image tag postfix added'
+        default: ''
+      ecr_repo:
+        required: false
+        default: 'com.metica.ml.bid-optim-etl-py'
+        description: 'ECR Repo to deploy'
+      arm:
+        required: false
+        description: 'ARM based docker image'
+        default: 'false'
 env:
   us_east_1: dev
   eu_west_1: prod-eu
