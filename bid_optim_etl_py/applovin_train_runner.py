@@ -505,8 +505,6 @@ def arg_parser():
     parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
     parser.add_argument("--icebergTrainDataTable", help="Iceberg db table name for training data")
     parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
-    parser.add_argument("--createEmptyModel", action="store_true", help="Create empty model", default=False)
-    parser.add_argument("--epsilon", type=float, default=0.1, help="Epsilon value for exploration in training")
     return parser.parse_args()
 
 
@@ -768,6 +766,12 @@ def run():
     logging.info(f"ETL Config: {etl_config}")
     logging.info(f"Model Config: {model_config}")
 
+    epsilon = 0.1
+    create_empty_model = True
+    if model_config and model_config.parameters:
+        epsilon = model_config.parameters.get("epsilon", 0.1)
+        create_empty_model = model_config.parameters.get("createEmptyModel", True)
+
     init_ray_cluster()
 
     training_data = read_training_data(
@@ -780,11 +784,11 @@ def run():
         etl_config.lookbackWindowInDays,
     ).drop_columns(["cpmFloorAdUnitIds"])
 
-    if cmd_line_args.createEmptyModel:
+    if create_empty_model:
         logging.info("Creating empty model as it is requested in the args")
         save_predictor_object(
             Predictor(
-                epsilon=cmd_line_args.epsilon,
+                epsilon=epsilon,
                 clf=None,
                 value_replacer=ValueReplacer(valid_values={}, default_value="other"),
                 features=Features([]),
@@ -821,7 +825,7 @@ def run():
 
         save_predictor_object(
             Predictor(
-                epsilon=cmd_line_args.epsilon,
+                epsilon=epsilon,
                 clf=RayTrainReportCallback.get_model(result.checkpoint),
                 value_replacer=value_replacer,
                 features=features,
@@ -833,7 +837,7 @@ def run():
         logging.warning("Training data is empty, hence skipping model training, creating empty model.")
         save_predictor_object(
             Predictor(
-                epsilon=cmd_line_args.epsilon,
+                epsilon=epsilon,
                 clf=None,
                 value_replacer=ValueReplacer(valid_values={}, default_value="other"),
                 features=Features([]),
