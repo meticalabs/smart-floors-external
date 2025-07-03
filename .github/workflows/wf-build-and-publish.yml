@@ -1,6 +1,6 @@
-name: Deploy Env Tar to S3
+name: Build and Publish
 
-on:
+on: 
   workflow_dispatch:
     inputs:
       python_version:
@@ -16,6 +16,22 @@ on:
         options:
           - us-east-1
           - eu-west-1
+      bid_floor_model_version:
+        required: false
+        description: 'Bid Floor Model version to use for installation'
+        default: 'latest'
+      image_tag_postfix:
+        required: false
+        description: 'Docker image tag postfix added'
+        default: ''
+      ecr_repo:
+        required: false
+        default: 'com.metica.ml.bid-optim-etl-py'
+        description: 'ECR Repo to deploy'
+      arm:
+        required: false
+        description: 'ARM based docker image'
+        default: 'false'
 env:
   us_east_1: dev
   eu_west_1: prod-eu
@@ -45,8 +61,8 @@ jobs:
     runs-on: ubuntu-latest-m
     env:
       CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
-      ENVIRONMENT: $${{ needs.variables.outputs.ENVIRONMENT }}
-      ROLE: $${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
+      ENVIRONMENT: ${{ needs.variables.outputs.ENVIRONMENT }}
+      ROLE: ${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
     steps:
       - uses: actions/checkout@v3
 
@@ -108,8 +124,14 @@ jobs:
           aws s3 cp $env_tar $s3_env_target
           echo "Publishing the .tar.gz from dist for ray cluster bootstrap"
           aws s3 cp ./dist/$env_tar s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/pyspark/bootstrap/
-          echo "Publishing the ray .py and .sh files to s3"
-          aws s3 cp ./bid_optim_etl_py/applovin_train_runner.py s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
-          aws s3 cp ./bid_optim_etl_py/applovin_model_publish.py s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
-          
 
+      - name: Docker deploy
+        uses: meticalabs/bid-optim-etl-py/.github/actions/publish-py-img-docker@main
+        with:
+          github_token: ${{ secrets.CI_GITHUB_TOKEN }}
+          bid_floor_model_version: ${{ inputs.bid_floor_model_version }}
+          image_tag_postfix: ${{ inputs.image_tag_postfix }}
+          aws_region: ${{ inputs.aws_region }}
+          ecr_repo: ${{ inputs.ecr_repo }}
+          arm: ${{ inputs.arm }}
+          gh_openid_role_arn: ${{ secrets.GH_OPENID_ROLE_ARN }}
