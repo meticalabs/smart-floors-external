@@ -108,9 +108,14 @@ jobs:
           aws s3 cp $env_tar $s3_env_target
           echo "Publishing the .tar.gz from dist for ray cluster bootstrap"
           aws s3 cp ./dist/$env_tar s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/pyspark/bootstrap/
-          echo "Publishing the ray .py and .sh files to s3"
-          aws s3 cp ./bid_optim_etl_py/applovin_train_runner.py s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
-          aws s3 cp ./bid_optim_etl_py/applovin_train_runner.sh s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
-          aws s3 cp ./bid_optim_etl_py/applovin_model_publish.py s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
-          aws s3 cp ./bid_optim_etl_py/applovin_model_publish.sh s3://com.metica.${{env.ENVIRONMENT}}.dplat.artifacts/ray/
-          
+
+      - name: Docker deploy
+        uses: meticalabs/bid-optim-etl-py/.github/actions/publish-py-img-docker@main
+        with:
+          github_token: ${{ secrets.CI_GITHUB_TOKEN }}
+          bid_floor_model_version: ${{ inputs.bid_floor_model_version }}
+          image_tag_postfix: ${{ inputs.image_tag_postfix }}
+          aws_region: ${{ inputs.aws_region }}
+          ecr_repo: ${{ inputs.ecr_repo }}
+          arm: ${{ inputs.arm }}
+          gh_openid_role_arn: ${{ secrets.GH_OPENID_ROLE_ARN }}
