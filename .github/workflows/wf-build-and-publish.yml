@@ -47,7 +47,7 @@ permissions:
 jobs:
   variables:
     outputs:
-      AWS_REGION_KEY: ${{ steps.var.outputs.AWS_REGION_KEY }}
+      ENVIRONMENT: ${{ steps.var.outputs.ENVIRONMENT }}
     runs-on: "ubuntu-latest"
     steps:
       - name: Setting global variables
@@ -55,15 +55,14 @@ jobs:
         id: var
         with:
           script: |
-            const awsRegionKey = '${{ inputs.aws_region }}'.toLowerCase().replaceAll(/[/-]/g, '_').trim('_');
-            core.setOutput('AWS_REGION_KEY', awsRegionKey);
+            core.setOutput('ENVIRONMENT', '${{ inputs.aws_region }}'.toLowerCase().replaceAll(/[/-]/g, '_').trim('_'));
   build:
     needs: [ variables ]
     runs-on: ubuntu-latest-m
     env:
       CI_GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
-      ENVIRONMENT: ${{ env[needs.variables.outputs.AWS_REGION_KEY] }}
-      ROLE: ${{ env[format('{0}_role', needs.variables.outputs.AWS_REGION_KEY)] }}
+      ENVIRONMENT: ${{ needs.variables.outputs.ENVIRONMENT }}
+      ROLE: ${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
     steps:
       - uses: actions/checkout@v3
 
