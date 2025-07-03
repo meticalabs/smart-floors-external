@@ -30,7 +30,7 @@ ruff:  ## Run linters
 
 .PHONY: cov
 cov: ## Run tests with coverage
-	uv run pytest --cov=bid_optim_etl_py --cov-report=xml --cov-report=html --cov-report=term-missing
+	uv run pytest -n auto --cov=bid_optim_etl_py --cov-report=xml --cov-report=html --cov-report=term-missing
 
 .PHONY: doc
 doc:  ## Build documentation
