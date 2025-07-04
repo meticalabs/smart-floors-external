@@ -33,7 +33,7 @@ on:
       lambda_function_name:
         description: 'Lambda function name'
         required: false
-        default: 'lambda/admon_sagemaker'
+        default: 'admon_sagemaker'
 
 env:
   us_east_1_role: ${{ secrets.DEV_AWS_DEPLOY_ROLE }}
