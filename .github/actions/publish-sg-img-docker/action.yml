@@ -89,7 +89,7 @@ runs:
         # If the bid_floor_model_version is 'latest' then use project version with first two version
         # numbers, otherwise use the provided version.
         if [[ "${{ inputs.bid_floor_model_version }}" == "latest" ]]; then
-          VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          VERSION=$(python -c "import tomli; print(tomli.load(open('../pyproject.toml', 'rb'))['project']['version'])")
           IFS='.' read -r -a VERSION_PARTS <<< "$VERSION"
           IMAGE_TAG="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}"
         else
