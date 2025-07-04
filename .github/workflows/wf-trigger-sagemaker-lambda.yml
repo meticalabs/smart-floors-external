@@ -55,8 +55,8 @@ jobs:
     needs: [ variables ]
     runs-on: ubuntu-latest
     env:
-      ENVIRONMENT: ${{ needs.variables.outputs.ENVIRONMENT }}
-      ROLE: ${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
+      ENVIRONMENT: $${{ needs.variables.outputs.ENVIRONMENT }}
+      ROLE: $${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
