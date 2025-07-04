@@ -6,7 +6,11 @@ on:
       region:
         description: 'AWS Region'
         required: true
+        type: choice
         default: 'us-east-1'
+        options:
+          - us-east-1
+          - eu-west-1
       action:
         description: 'Action to perform'
         required: true
@@ -27,13 +31,32 @@ on:
         required: false
         default: 'ml.c5.xlarge'
 
+env:
+  us_east_1_role: ${{ secrets.DEV_AWS_DEPLOY_ROLE }}
+  eu_west_1_role: ${{ secrets.PROD_EU_AWS_DEPLOY_ROLE }}
+
 permissions:
   id-token: write
   contents: read
 
 jobs:
+  variables:
+    outputs:
+      ENVIRONMENT: ${{ steps.var.outputs.ENVIRONMENT }}
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Setting global variables
+        uses: actions/github-script@v6
+        id: var
+        with:
+          script: |
+            core.setOutput('ENVIRONMENT', '${{ github.event.inputs.region }}'.toLowerCase().replaceAll(/[/-]/g, '_').trim('_'));
   trigger-lambda:
+    needs: [ variables ]
     runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: ${{ needs.variables.outputs.ENVIRONMENT }}
+      ROLE: ${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -44,8 +67,15 @@ jobs:
           role-to-assume: ${{ secrets.GH_OPENID_ROLE_ARN }}
           aws-region: ${{ github.event.inputs.region }}
 
-      - name: Invoke Lambda function
+      - name: Assume role and invoke Lambda
+        shell: bash -el {0}
         run: |
+          export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" \
+          $(aws sts assume-role \
+          --role-arn ${{env.ROLE}} \
+          --role-session-name MySessionName \
+          --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
+          --output text))
           aws lambda invoke \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --payload '{
