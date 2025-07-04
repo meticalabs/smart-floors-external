@@ -11,8 +11,9 @@ inputs:
     required: true
     description: 'Secret token for accessing GitHub packages'
   bid_floor_model_version:
-    required: true
+    required: false
     description: 'Bid Floor Model version to use for installation'
+    default: 'latest'
   image_tag_postfix:
     required: false
     description: 'Docker image tag postfix added'
