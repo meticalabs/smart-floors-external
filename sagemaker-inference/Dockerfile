@@ -6,6 +6,10 @@ RUN apt-get update && apt-get upgrade -y && apt-get clean
 # Basic dependencies
 RUN apt-get install -y curl build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev wget libbz2-dev
 
+ENV GIT_TERMINAL_PROMPT=0
+ARG GITHUB_TOKEN
+RUN echo "machine github.com login x-oauth-token password $GITHUB_TOKEN" > ~/.netrc
+RUN chmod 600 ~/.netrc
 
 FROM python:3.10.14-slim
 COPY --from=openjdk:8-jre-slim /usr/local/openjdk-8 /usr/local/openjdk-8
