@@ -65,6 +65,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -94,5 +97,5 @@ jobs:
 
           aws lambda invoke \
             --function-name ${{ github.event.inputs.lambda_function_name }} \
-            --cli-input-json file://payload.json \
-            response.json
+            --payload file://payload.json \
+            --cli-binary-format raw-in-base64-out response.json
