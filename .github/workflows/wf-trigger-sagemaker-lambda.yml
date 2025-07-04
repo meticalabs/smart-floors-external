@@ -30,6 +30,10 @@ on:
         description: 'SageMaker instance type'
         required: false
         default: 'ml.c5.xlarge'
+      lambda_function_name:
+        description: 'Lambda function name'
+        required: false
+        default: '/lambda/admon_sagemaker'
 
 env:
   us_east_1_role: ${{ secrets.DEV_AWS_DEPLOY_ROLE }}
@@ -77,7 +81,7 @@ jobs:
           --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
           --output text))
           aws lambda invoke \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --function-name ${{ github.event.inputs.lambda_function_name }} \
             --payload '{
               "body": "{\"action\": \"${{ github.event.inputs.action }}\", \"docker_version\": \"${{ github.event.inputs.docker_version }}\", \"docker_image\": \"${{ github.event.inputs.docker_image }}\", \"instance_type\": \"${{ github.event.inputs.instance_type }}\"}"
             }' \
