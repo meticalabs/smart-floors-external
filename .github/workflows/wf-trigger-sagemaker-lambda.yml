@@ -59,8 +59,8 @@ jobs:
     needs: [ variables ]
     runs-on: ubuntu-latest
     env:
-      ENVIRONMENT: $${{ needs.variables.outputs.ENVIRONMENT }}
-      ROLE: $${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
+      ENVIRONMENT: ${{ needs.variables.outputs.ENVIRONMENT }}
+      ROLE: ${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -80,9 +80,19 @@ jobs:
           --role-session-name MySessionName \
           --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" \
           --output text))
+
+          PAYLOAD_BODY=$(jq -n \
+            --arg action "${{ github.event.inputs.action }}" \
+            --arg docker_version "${{ github.event.inputs.docker_version }}" \
+            --arg docker_image "${{ github.event.inputs.docker_image }}" \
+            --arg instance_type "${{ github.event.inputs.instance_type }}" \
+            '{action: $action, docker_version: $docker_version, docker_image: $docker_image, instance_type: $instance_type}')
+
+          PAYLOAD=$(jq -n --argjson body "$PAYLOAD_BODY" '{body: $body}')
+
+          echo "$PAYLOAD" > payload.json
+
           aws lambda invoke \
             --function-name ${{ github.event.inputs.lambda_function_name }} \
-            --payload '{
-              "body": "{\"action\": \"${{ github.event.inputs.action }}\", \"docker_version\": \"${{ github.event.inputs.docker_version }}\", \"docker_image\": \"${{ github.event.inputs.docker_image }}\", \"instance_type\": \"${{ github.event.inputs.instance_type }}\"}"
-            }' \
+            --cli-input-json file://payload.json \
             response.json
