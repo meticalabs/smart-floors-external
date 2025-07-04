@@ -17,8 +17,9 @@ on:
           - us-east-1
           - eu-west-1
       bid_floor_model_version:
-        required: true
+        required: false
         description: 'Bid Floor Model version to use for installation'
+        default: 'latest'
       image_tag_postfix:
         required: false
         description: 'Docker image tag postfix added'
