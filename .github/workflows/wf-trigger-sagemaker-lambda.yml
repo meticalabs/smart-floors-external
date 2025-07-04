@@ -1,0 +1,54 @@
+name: Trigger SageMaker Lambda
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'AWS Region'
+        required: true
+        default: 'us-east-1'
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        default: 'create'
+        options:
+          - create
+          - delete
+      docker_version:
+        description: 'Docker image version'
+        required: true
+      docker_image:
+        description: 'Docker image name'
+        required: false
+        default: 'com.metica.ml.bid-floor-sagemaker-byoc'
+      instance_type:
+        description: 'SageMaker instance type'
+        required: false
+        default: 'ml.c5.xlarge'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  trigger-lambda:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GH_OPENID_ROLE_ARN }}
+          aws-region: ${{ github.event.inputs.region }}
+
+      - name: Invoke Lambda function
+        run: |
+          aws lambda invoke \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --payload '{
+              "body": "{\"action\": \"${{ github.event.inputs.action }}\", \"docker_version\": \"${{ github.event.inputs.docker_version }}\", \"docker_image\": \"${{ github.event.inputs.docker_image }}\", \"instance_type\": \"${{ github.event.inputs.instance_type }}\"}"
+            }' \
+            response.json
