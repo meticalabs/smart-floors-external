@@ -501,42 +501,50 @@ class TestModelTrainerUtilities:
 
 class TestCastTypes:
     def test_cast_types_numpy(self):
-        # Sample numpy array
-        batch = np.array([[1, "2", 3.0], [4, "5", 6.0], [7, "8", 9.0]], dtype=object)
+        # Sample dictionary of numpy arrays
+        batch = {
+            "col1": np.array([1, 4, 7], dtype=object),
+            "col2": np.array(["2", "5", "8"], dtype=object),
+            "col3": np.array([3.0, 6.0, 9.0], dtype=object),
+        }
 
-        # Schema for casting
-        feature_schema = {0: "int32", 1: "str", 2: "float64"}
+        # Schema for casting (column names as keys)
+        feature_schema = {"col1": "int32", "col2": "str", "col3": "float64"}
 
         # Cast types
         casted_batch = cast_types_numpy(batch.copy(), feature_schema)
 
         # Assertions
-        assert isinstance(casted_batch[0, 0], (int, np.integer))
-        assert isinstance(casted_batch[0, 1], (str, np.str_))
-        assert isinstance(casted_batch[0, 2], (float, np.floating))
+        assert isinstance(casted_batch["col1"][0], (int, np.integer))
+        assert isinstance(casted_batch["col2"][0], (str, np.str_))
+        assert isinstance(casted_batch["col3"][0], (float, np.floating))
 
-        assert isinstance(casted_batch[1, 0], (int, np.integer))
-        assert isinstance(casted_batch[1, 1], (str, np.str_))
-        assert isinstance(casted_batch[1, 2], (float, np.floating))
+        assert isinstance(casted_batch["col1"][1], (int, np.integer))
+        assert isinstance(casted_batch["col2"][1], (str, np.str_))
+        assert isinstance(casted_batch["col3"][1], (float, np.floating))
 
-        assert isinstance(casted_batch[2, 0], (int, np.integer))
-        assert isinstance(casted_batch[2, 1], (str, np.str_))
-        assert isinstance(casted_batch[2, 2], (float, np.floating))
+        assert isinstance(casted_batch["col1"][2], (int, np.integer))
+        assert isinstance(casted_batch["col2"][2], (str, np.str_))
+        assert isinstance(casted_batch["col3"][2], (float, np.floating))
 
         # Test with different dtypes
-        batch_2 = np.array([["10", 20, 30.5], ["40", 50, 60.5]], dtype=object)
+        batch_2 = {
+            "colA": np.array(["10", "40"], dtype=object),
+            "colB": np.array([20, 50], dtype=object),
+            "colC": np.array([30.5, 60.5], dtype=object),
+        }
 
-        feature_schema_2 = {0: "str", 1: "float32", 2: "int64"}
+        feature_schema_2 = {"colA": "str", "colB": "float32", "colC": "int64"}
 
         casted_batch_2 = cast_types_numpy(batch_2.copy(), feature_schema_2)
 
-        assert isinstance(casted_batch_2[0, 0], (str, np.str_))
-        assert isinstance(casted_batch_2[0, 1], (float, np.floating))
-        assert isinstance(casted_batch_2[0, 2], (int, np.integer))
+        assert isinstance(casted_batch_2["colA"][0], (str, np.str_))
+        assert isinstance(casted_batch_2["colB"][0], (float, np.floating))
+        assert isinstance(casted_batch_2["colC"][0], (int, np.integer))
 
-        assert isinstance(casted_batch_2[1, 0], (str, np.str_))
-        assert isinstance(casted_batch_2[1, 1], (float, np.floating))
-        assert isinstance(casted_batch_2[1, 2], (int, np.integer))
+        assert isinstance(casted_batch_2["colA"][1], (str, np.str_))
+        assert isinstance(casted_batch_2["colB"][1], (float, np.floating))
+        assert isinstance(casted_batch_2["colC"][1], (int, np.integer))
 
 
 class TestModelTrainingRun:
