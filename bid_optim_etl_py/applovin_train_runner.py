@@ -845,8 +845,8 @@ def run():
         feature_schema = {(field.name, field.dtype) for field in model_features.fields}
 
         training_data = training_data.map_batches(
-            lambda batch: cast_types_numpy(batch, dict(feature_schema)),
-            batch_format="numpy",
+            lambda batch: cast_types(batch, dict(feature_schema)),
+            batch_format="pandas",
         )
 
         result, value_replacer, features = trainer.run(
