@@ -478,7 +478,8 @@ class TestImpressionCount:
         df_missing = pd.DataFrame(data_missing_col)
         df_missing["category"] = df_missing["category"].astype("category")
 
-        value_replacer_missing = ValueReplacer(valid_values={"category": ["A"], "new_col": [1, 2]}, default_value="missing_val")
+        value_replacer_missing = ValueReplacer(valid_values={"category": ["A"], "new_col": [1, 2]},
+                                               default_value="missing_val")
         transformed_df_missing = value_replacer_missing.transform(df_missing.copy())
 
         assert "new_col" in transformed_df_missing.columns
