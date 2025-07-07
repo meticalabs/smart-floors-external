@@ -4,8 +4,6 @@ import itertools
 import logging
 import os
 import sys
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stdout)
 from typing import Tuple, Optional
 
 import boto3
@@ -29,6 +27,8 @@ from bid_optim_etl_py.cfg_parser import ConfigFile
 from bid_optim_etl_py.command_line_args import ApplovinModelTrainingArgsParser
 from bid_optim_etl_py.cw_publisher import CloudWatchAlerts
 from bid_optim_etl_py.utils.management_api import BidFloorManagementAPI, ETLConfig, HttpClient
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", stream=sys.stdout)
 
 
 @dataclass
