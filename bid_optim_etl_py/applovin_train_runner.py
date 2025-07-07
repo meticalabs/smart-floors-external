@@ -4,6 +4,8 @@ import itertools
 import logging
 import os
 import sys
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stdout)
 from typing import Tuple, Optional
 
 import boto3
@@ -527,9 +529,12 @@ def cast_types(batch: pd.DataFrame, schema: dict[str, str]) -> pd.DataFrame:
 def cast_types_numpy(batch, feature_schema):
     """
     Function to cast a batch of data (NumPy array) to the specified schema types.
+    `batch` is a dictionary of NumPy arrays, where keys are column names.
+    `feature_schema` is a dictionary where keys are feature names and values are dtypes.
     """
-    for col_idx, (feature_name, feature_type) in enumerate(feature_schema.items()):
-        batch[:, col_idx] = batch[:, col_idx].astype(feature_type)
+    for feature_name, feature_type in feature_schema.items():
+        if feature_name in batch:
+            batch[feature_name] = batch[feature_name].astype(feature_type)
     return batch
 
 
