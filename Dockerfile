@@ -1,4 +1,4 @@
-FROM anyscale/ray:2.44.1-slim-py310
+FROM anyscale/ray:2.47.1-slim-py310
 
 COPY --chown=ray:ray . /home/ray/app
 

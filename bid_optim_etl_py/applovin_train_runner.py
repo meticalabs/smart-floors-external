@@ -532,6 +532,12 @@ def read_training_data(
     try:
         catalog = load_catalog(name="default", **{"type": "glue", "client.region": region})
         table = catalog.load_table(iceberg_train_data)
+        # Select columns which are not present below
+        schema = table.schema()
+        all_columns = [field.name for field in schema.fields]
+        columns_to_exclude = ["estimates", "cpmFloorAdUnitIds"]
+        selected_columns = [col for col in all_columns if col not in columns_to_exclude]
+
         table_data = table.scan(
             row_filter=EqualTo(Schema.CUSTOMER_ID, customer_id)
             & EqualTo(Schema.APP_ID, app_id)
@@ -539,7 +545,8 @@ def read_training_data(
             & LessThanOrEqual(Schema.DATE, date.strftime("%Y-%m-%d"))
             & GreaterThanOrEqual(
                 Schema.DATE, (date - datetime.timedelta(days=lookback_window_in_days)).strftime("%Y-%m-%d")
-            )
+            ),
+            selected_fields=tuple(selected_columns),
         ).to_ray()
         if num_blocks:
             return table_data.repartition(num_blocks)
