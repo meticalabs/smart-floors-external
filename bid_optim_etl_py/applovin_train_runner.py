@@ -795,7 +795,7 @@ def run():
         cmd_line_args.modelId,
         datetime.date.fromisoformat(cmd_line_args.date),
         etl_config.lookbackWindowInDays,
-    ).drop_columns(["cpmFloorAdUnitIds"])
+    )
 
     if create_empty_model:
         logging.info("Creating empty model as it is requested in the args")
