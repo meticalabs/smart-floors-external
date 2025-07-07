@@ -268,10 +268,13 @@ class ModelTrainer:
             return ValueReplacer(valid_values={}, default_value=default_category)
 
         # Create a dataset of (column_name, value) pairs for all relevant columns
+        # Replace None to "metica-None" str and later replace it to None
+        metica_none = "metica-None"
+
         long_ds = dataset.map_batches(
-            lambda df: df[[col for col in columns if col in df.columns]].melt(
-                var_name="column_name", value_name="value"
-            ),
+            lambda df: df[[col for col in columns if col in df.columns]]
+            .fillna(metica_none)
+            .melt(var_name="column_name", value_name="value"),
             batch_format="pandas",
         )
 
@@ -287,7 +290,10 @@ class ModelTrainer:
         if not all_counts.empty:
             for col in columns:
                 # Filter for the current column
-                col_values = all_counts[all_counts["column_name"] == col]["value"].tolist()
+                col_values = [
+                    None if value == metica_none else value
+                    for value in all_counts[all_counts["column_name"] == col]["value"].tolist()
+                ]
                 if col_values:
                     features_with_min_impressions[col] = sorted(list(set(col_values)), key=lambda x: (x is None, x))
 
