@@ -6,7 +6,14 @@ import pytest
 import ray
 from ray.train.xgboost import RayTrainReportCallback
 
-from bid_optim_etl_py.applovin_train_runner import ModelTrainer, ValueReplacer, ModelFeatures, ModelConfig, Features
+from bid_optim_etl_py.applovin_train_runner import (
+    ModelTrainer,
+    ValueReplacer,
+    ModelFeatures,
+    ModelConfig,
+    Features,
+    cast_types_numpy,
+)
 from bid_optim_etl_py.utils.management_api import ETLConfig
 
 
@@ -492,6 +499,46 @@ class TestModelTrainerUtilities:
         assert valid_weights.count() == 0
 
 
+class TestCastTypes:
+    def test_cast_types_numpy(self):
+        # Sample numpy array
+        batch = np.array([[1, "2", 3.0], [4, "5", 6.0], [7, "8", 9.0]], dtype=object)
+
+        # Schema for casting
+        feature_schema = {0: "int32", 1: "str", 2: "float64"}
+
+        # Cast types
+        casted_batch = cast_types_numpy(batch.copy(), feature_schema)
+
+        # Assertions
+        assert isinstance(casted_batch[0, 0], (int, np.integer))
+        assert isinstance(casted_batch[0, 1], (str, np.str_))
+        assert isinstance(casted_batch[0, 2], (float, np.floating))
+
+        assert isinstance(casted_batch[1, 0], (int, np.integer))
+        assert isinstance(casted_batch[1, 1], (str, np.str_))
+        assert isinstance(casted_batch[1, 2], (float, np.floating))
+
+        assert isinstance(casted_batch[2, 0], (int, np.integer))
+        assert isinstance(casted_batch[2, 1], (str, np.str_))
+        assert isinstance(casted_batch[2, 2], (float, np.floating))
+
+        # Test with different dtypes
+        batch_2 = np.array([["10", 20, 30.5], ["40", 50, 60.5]], dtype=object)
+
+        feature_schema_2 = {0: "str", 1: "float32", 2: "int64"}
+
+        casted_batch_2 = cast_types_numpy(batch_2.copy(), feature_schema_2)
+
+        assert isinstance(casted_batch_2[0, 0], (str, np.str_))
+        assert isinstance(casted_batch_2[0, 1], (float, np.floating))
+        assert isinstance(casted_batch_2[0, 2], (int, np.integer))
+
+        assert isinstance(casted_batch_2[1, 0], (str, np.str_))
+        assert isinstance(casted_batch_2[1, 1], (float, np.floating))
+        assert isinstance(casted_batch_2[1, 2], (int, np.integer))
+
+
 class TestModelTrainingRun:
     @pytest.fixture
     def training_data(self):
@@ -594,7 +641,7 @@ class TestModelTrainingRun:
         train_dataset, valid_dataset, test_dataset = model_object.prepare_data(single_record_data, "totalAmount")
         assert train_dataset.count() == 1
         assert valid_dataset.count() == 0
-        assert test_dataset.count() == 0 # test_dataset is derived from valid_dataset, so it should also be empty
+        assert test_dataset.count() == 0  # test_dataset is derived from valid_dataset, so it should also be empty
 
     def test_prepare_data_with_empty_dataset(self, model_object):
         empty_dataset = ray.data.from_items([])

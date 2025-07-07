@@ -524,6 +524,15 @@ def cast_types(batch: pd.DataFrame, schema: dict[str, str]) -> pd.DataFrame:
     return batch
 
 
+def cast_types_numpy(batch, feature_schema):
+    """
+    Function to cast a batch of data (NumPy array) to the specified schema types.
+    """
+    for col_idx, (feature_name, feature_type) in enumerate(feature_schema.items()):
+        batch[:, col_idx] = batch[:, col_idx].astype(feature_type)
+    return batch
+
+
 def read_training_data(
     region: str,
     iceberg_train_data: str,
@@ -538,24 +547,26 @@ def read_training_data(
     try:
         catalog = load_catalog(name="default", **{"type": "glue", "client.region": region})
         table = catalog.load_table(iceberg_train_data)
-        # Select columns which are not present below
         schema = table.schema()
         all_columns = [field.name for field in schema.fields]
         columns_to_exclude = ["estimates", "cpmFloorAdUnitIds"]
         selected_columns = [col for col in all_columns if col not in columns_to_exclude]
-
-        table_data = table.scan(
-            row_filter=EqualTo(Schema.CUSTOMER_ID, customer_id)
+        row_filter = (
+            EqualTo(Schema.CUSTOMER_ID, customer_id)
             & EqualTo(Schema.APP_ID, app_id)
             & EqualTo(Schema.MODEL_ID, model_id)
             & LessThanOrEqual(Schema.DATE, date.strftime("%Y-%m-%d"))
             & GreaterThanOrEqual(
                 Schema.DATE, (date - datetime.timedelta(days=lookback_window_in_days)).strftime("%Y-%m-%d")
-            ),
+            )
+        )
+        table_data = ray.data.read_iceberg(
+            table_identifier=iceberg_train_data,
+            catalog_kwargs={"name": "default", "type": "glue", "client.region": region},
+            row_filter=row_filter,
             selected_fields=tuple(selected_columns),
-        ).to_ray()
-        if num_blocks:
-            return table_data.repartition(num_blocks)
+            override_num_blocks=num_blocks,
+        )
     except Exception:
         cw_alert.cw_wrapper.put_metric_data(
             namespace="SmartBidPipeline",
@@ -829,7 +840,8 @@ def run():
         feature_schema = {(field.name, field.dtype) for field in model_features.fields}
 
         training_data = training_data.map_batches(
-            lambda batch: cast_types(batch, dict(feature_schema)), batch_format="pandas"
+            lambda batch: cast_types_numpy(batch, dict(feature_schema)),
+            batch_format="numpy",
         )
 
         result, value_replacer, features = trainer.run(
