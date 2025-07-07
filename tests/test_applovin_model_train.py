@@ -432,6 +432,58 @@ class TestImpressionCount:
             ["A", None], key=lambda x: (x is None, "" if x is None else x)
         )
 
+    def test_value_replacer_transform_with_none_and_new_category(self, ray_cluster):
+        # Create a sample DataFrame with a categorical column containing None
+        data = {"category": ["A", "B", None, "A"], "value": [1, 2, 3, 4]}
+        df = pd.DataFrame(data)
+        df["category"] = df["category"].astype("category")
+
+        # Define a ValueReplacer where 'new_category' is not in the initial categories
+        value_replacer = ValueReplacer(valid_values={"category": ["A", "B"]}, default_value="new_category")
+
+        # Apply the transform method
+        transformed_df = value_replacer.transform(df.copy())
+
+        # Assertions
+        # Check if 'new_category' is added to categories
+        assert "new_category" in transformed_df["category"].cat.categories
+
+        # Check if None values are replaced with 'new_category'
+        expected_category = pd.Series(
+            pd.Categorical(["A", "B", "new_category", "A"], categories=["A", "B", "new_category"]),
+            dtype="category",
+            name="category",
+        )
+        pd.testing.assert_series_equal(transformed_df["category"], expected_category)
+
+        # Test with a column that doesn't exist in valid_values but exists in df
+        data_with_extra_col = {"category": ["A", None], "other_col": [10, 20]}
+        df_extra = pd.DataFrame(data_with_extra_col)
+        df_extra["category"] = df_extra["category"].astype("category")
+
+        value_replacer_extra = ValueReplacer(valid_values={"category": ["A"]}, default_value="default_val")
+        transformed_df_extra = value_replacer_extra.transform(df_extra.copy())
+
+        assert "default_val" in transformed_df_extra["category"].cat.categories
+        expected_category_extra = pd.Series(
+            pd.Categorical(["A", "default_val"], categories=["A", "default_val"]),
+            dtype="category",
+            name="category",
+        )
+        pd.testing.assert_series_equal(transformed_df_extra["category"], expected_category_extra)
+        assert "other_col" in transformed_df_extra.columns
+
+        # Test with a column that is not in df but is in valid_values
+        data_missing_col = {"category": ["A", "B"]}
+        df_missing = pd.DataFrame(data_missing_col)
+        df_missing["category"] = df_missing["category"].astype("category")
+
+        value_replacer_missing = ValueReplacer(valid_values={"category": ["A"], "new_col": [1, 2]}, default_value="missing_val")
+        transformed_df_missing = value_replacer_missing.transform(df_missing.copy())
+
+        assert "new_col" in transformed_df_missing.columns
+        assert all(transformed_df_missing["new_col"] == "missing_val")
+
 
 class TestFeatures:
     def test_feature_assembler(self, model_object):

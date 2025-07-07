@@ -274,9 +274,17 @@ class ModelTrainer:
         metica_none = "metica-None"
 
         long_ds = dataset.map_batches(
-            lambda df: df[[col for col in columns if col in df.columns]]
-            .fillna(metica_none)
-            .melt(var_name="column_name", value_name="value"),
+            lambda df: (
+                df[[col for col in columns if col in df.columns]]
+                .apply(
+                    lambda series: series.cat.add_categories([metica_none])
+                    if isinstance(series.dtype, pd.CategoricalDtype)
+                    and metica_none not in series.cat.categories
+                    else series
+                )
+                .fillna(metica_none)
+                .melt(var_name="column_name", value_name="value")
+            ),
             batch_format="pandas",
         )
 
