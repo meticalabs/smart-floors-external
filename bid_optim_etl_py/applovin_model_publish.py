@@ -270,7 +270,7 @@ def publish_artifacts():
     call_allocator_service(
         allocator_service_uri=parsed_args_obj.allocatorServiceUri,
         reference=parsed_args_obj.appId,
-        endpoint_name=f"bid-floor-{parsed_args_obj.appId}-{parsed_args_obj.bidFloorVersion.replace('.', '-')}",
+        endpoint_name=f"bid-floor-{parsed_args_obj.bidFloorVersion.replace('.', '-')}",
         model_name=tar_file_name,
     )
 
