@@ -9,6 +9,12 @@ import joblib
 from bid_optim_etl_py.applovin_train_runner import Predictor, ValueReplacer, Features
 
 
+def create_tar_archive(source_dir, output_filename):
+    print(f"Creating tar archive from {source_dir} to {output_filename}")
+    with tarfile.open(os.path.join(os.path.dirname(source_dir), output_filename), "w:gz") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
+
+
 def create_empty_model_artifact(output_tar_file):
     """
     Creates an empty model artifact and saves it to the specified tarball path.
@@ -30,19 +36,16 @@ def create_empty_model_artifact(output_tar_file):
     }
 
     # Create a temporary directory to stage the artifact
-    tar_file_name = os.path.basename(output_tar_file)
-    staging_dir = os.path.join(tempfile.mkdtemp(), tar_file_name)
-
+    tar_file_name = os.path.basename(output_tar_file).replace(".tar.gz", "")
+    tmp_dir = os.path.dirname(output_tar_file)
+    staging_dir = os.path.join(tmp_dir, tar_file_name)
     try:
         os.makedirs(staging_dir, exist_ok=True)
 
         joblib_file = os.path.join(staging_dir, "predictor.joblib")
         joblib.dump(model_dict, joblib_file)
 
-        # Create the tarball of the staging directory
-        with tarfile.open(output_tar_file, "w:gz") as tar:
-            tar.add(staging_dir, arcname=os.path.basename(staging_dir))
-
+        create_tar_archive(staging_dir, os.path.basename(output_tar_file))
 
         print(f"Empty model artifact created at: {output_tar_file}")
 
