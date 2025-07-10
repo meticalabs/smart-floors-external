@@ -1,0 +1,67 @@
+name: Upload Empty Model to S3
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_region:
+        required: true
+        type: choice
+        description: 'AWS region to deploy'
+        default: 'us-east-1'
+        options:
+          - us-east-1
+          - eu-west-1
+      update_allocator_service:
+        required: true
+        type: boolean
+        description: 'Update the allocator service with the new endpoint details'
+        default: false
+      model_version:
+        required: true
+        type: string
+        description: 'Model version (e.g., 1.0.20250710)'
+
+env:
+  us_east_1_bucket: com.metica.dev.dplat.artifacts
+  eu_west_1_bucket: com.metica.prod-eu.dplat.artifacts
+  us_east_1_allocator_base_uri: https://services-alb.dev.metica.com/experiments-allocator/api/v1/pipeline/experiment
+  eu_west_1_allocator_base_uri: https://services-alb.prod-eu.metica.com/experiments-allocator/api/v1/pipeline/experiment
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  upload-empty-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v1
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GH_OPENID_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Run upload script
+        env:
+          S3_BUCKET_NAME: ${{ env[format('{0}_bucket', replace(inputs.aws_region, '-', '_'))] }}
+          ALLOCATOR_BASE_URI: ${{ env[format('{0}_allocator_base_uri', replace(inputs.aws_region, '-', '_'))] }}
+        run: |
+          S3_PREFIX="sagemaker_inference/bid-floor-${{ inputs.model_version }}"
+          S3_PATH="s3://${S3_BUCKET_NAME}/${S3_PREFIX}/"
+          SCRIPT_ARGS="--s3-path $S3_PATH"
+
+          if [ "${{ inputs.update_allocator_service }}" == "true" ]; then
+            ALLOCATOR_URI="${ALLOCATOR_BASE_URI}/default_bid_floor/model"
+            SCRIPT_ARGS="$SCRIPT_ARGS --update-allocator --allocator-uri $ALLOCATOR_URI --model-version ${{ inputs.model_version }}"
+          fi
+
+          ./scripts/upload_empty_model.sh $SCRIPT_ARGS
