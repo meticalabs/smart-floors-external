@@ -84,9 +84,7 @@ if [ "$UPDATE_ALLOCATOR" = true ]; then
                 --arg model "${ARTIFACT_NAME}" \
                 '{reference: $ref, endpointName: $endpoint, modelName: $model}')
 
-    PAYLOAD=$(jq -n --argjson body "$PAYLOAD_BODY" '{body: $body}')
-
-    echo "$PAYLOAD" > payload.json
+    echo "$PAYLOAD_BODY" > payload.json
 
     aws lambda invoke \
             --function-name "$LAMBDA_NAME" \
