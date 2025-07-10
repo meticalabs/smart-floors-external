@@ -78,14 +78,11 @@ if [ "$UPDATE_ALLOCATOR" = true ]; then
     echo "Invoking Lambda function: $LAMBDA_NAME"
     echo "Payload: reference=$REFERENCE, endpointName=$ENDPOINT_NAME, modelName=$ARTIFACT_NAME"
 
-    PAYLOAD=$(cat <<-END
-    {
-        "reference": "${REFERENCE}",
-        "endpointName": "${ENDPOINT_NAME}",
-        "modelName": "${ARTIFACT_NAME}"
-    }
-	END
-	)
+    PAYLOAD=$(jq -n \
+                --arg ref "${REFERENCE}" \
+                --arg endpoint "${ENDPOINT_NAME}" \
+                --arg model "${ARTIFACT_NAME}" \
+                '{reference: $ref, endpointName: $endpoint, modelName: $model}')
 
     aws lambda invoke \
         --function-name "$LAMBDA_NAME" \
