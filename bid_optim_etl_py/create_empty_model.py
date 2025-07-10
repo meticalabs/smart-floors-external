@@ -2,7 +2,6 @@ import argparse
 import os
 import shutil
 import tarfile
-import tempfile
 
 import joblib
 
