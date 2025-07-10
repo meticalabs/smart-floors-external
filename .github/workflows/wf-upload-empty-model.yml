@@ -51,10 +51,14 @@ jobs:
           aws-region: ${{ inputs.aws_region }}
 
       - name: Run upload script
-        env:
-          S3_BUCKET_NAME: ${{ env[format('{0}_bucket', replace(inputs.aws_region, '-', '_'))] }}
-          ALLOCATOR_BASE_URI: ${{ env[format('{0}_allocator_base_uri', replace(inputs.aws_region, '-', '_'))] }}
         run: |
+          REGION_UNDERSCORE=$(echo "${{ inputs.aws_region }}" | tr '-' '_')
+          S3_BUCKET_NAME_VAR="${REGION_UNDERSCORE}_bucket"
+          ALLOCATOR_BASE_URI_VAR="${REGION_UNDERSCORE}_allocator_base_uri"
+
+          S3_BUCKET_NAME=${!S3_BUCKET_NAME_VAR}
+          ALLOCATOR_BASE_URI=${!ALLOCATOR_BASE_URI_VAR}
+
           S3_PREFIX="sagemaker_inference/bid-floor-${{ inputs.model_version }}"
           S3_PATH="s3://${S3_BUCKET_NAME}/${S3_PREFIX}/"
           SCRIPT_ARGS="--s3-path $S3_PATH"
