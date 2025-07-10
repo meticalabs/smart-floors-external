@@ -75,7 +75,9 @@ jobs:
           python-version: ${{ inputs.python_version }}
 
       - name: Run upload script
+        shell: bash -el {0}
         run: |
+          conda info
           conda activate test
           python --version
           proj_wheel_file=$(echo "${{steps.project.outputs.project_name}}-${{steps.project.outputs.project_version}}-py3-none-any.whl")
