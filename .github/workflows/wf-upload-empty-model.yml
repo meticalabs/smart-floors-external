@@ -50,7 +50,9 @@ jobs:
         with:
           script: |
             core.setOutput('ENVIRONMENT', '${{ inputs.aws_region }}'.toLowerCase().replaceAll(/[/-]/g, '_').trim('_'));
+
   upload-empty-model:
+    needs: [ variables ]
     runs-on: ubuntu-latest
     env:
       ROLE: $${{ format('{0}_role', needs.variables.outputs.ENVIRONMENT) }}
