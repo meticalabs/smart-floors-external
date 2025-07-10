@@ -1,11 +1,13 @@
-
-import os
-import tarfile
-import joblib
 import argparse
-import tempfile
+import os
 import shutil
+import tarfile
+import tempfile
+
+import joblib
+
 from bid_optim_etl_py.applovin_train_runner import Predictor, ValueReplacer, Features
+
 
 def create_empty_model_artifact(output_tar_file):
     """
@@ -20,7 +22,14 @@ def create_empty_model_artifact(output_tar_file):
     )
 
     # Create the dictionary to be saved in the joblib file
-    model_dict = {"default_bid_floor": empty_predictor}
+    model_dict = {
+        "default_bid_floor": {
+            "android_inter": empty_predictor,
+            "android_reward": empty_predictor,
+            "ios_inter": empty_predictor,
+            "ios_reward": empty_predictor,
+        }
+    }
 
     # Create a temporary directory to stage the artifact
     staging_dir = tempfile.mkdtemp()
@@ -38,6 +47,7 @@ def create_empty_model_artifact(output_tar_file):
     finally:
         # Clean up the temporary directory
         shutil.rmtree(staging_dir)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create an empty model artifact.")
