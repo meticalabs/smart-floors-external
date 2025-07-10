@@ -59,7 +59,7 @@ jobs:
       - name: Make All
         uses: meticalabs/gh_workflows/.github/actions/uv-build@main
         with:
-          github_token: ${{ inputs.github_token }}
+          github_token: ${{ secrets.CI_GITHUB_TOKEN }}
           branch: ${{ env.BRANCH_NAME }}
           run_make_all: true
 
