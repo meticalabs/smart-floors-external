@@ -3,6 +3,11 @@ name: Upload Empty Model to S3
 on:
   workflow_dispatch:
     inputs:
+      python_version:
+        required: false
+        type: string
+        description: 'Python version'
+        default: '3.10'
       aws_region:
         required: true
         type: choice
@@ -41,8 +46,22 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v1
 
-      - name: Install dependencies
-        run: uv sync --frozen
+      - name: Get project name and version
+        shell: bash -el {0}
+        run: |
+          pip install tomli
+          NAME=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['name'].replace('-', '_'))")
+          VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "project_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "project_name=$NAME" >> $GITHUB_OUTPUT
+        id: project
+
+      - name: Make All
+        uses: meticalabs/gh_workflows/.github/actions/uv-build@main
+        with:
+          github_token: ${{ inputs.github_token }}
+          branch: ${{ env.BRANCH_NAME }}
+          run_make_all: true
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -50,8 +69,21 @@ jobs:
           role-to-assume: ${{ secrets.GH_OPENID_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ inputs.python_version }}
+
       - name: Run upload script
         run: |
+          conda activate test
+          python --version
+          proj_wheel_file=$(echo "${{steps.project.outputs.project_name}}-${{steps.project.outputs.project_version}}-py3-none-any.whl")
+          
+          echo "Building $env_tar file from venv"
+          which python
+          python -m pip install ./dist/$proj_wheel_file
+          
           REGION_UNDERSCORE=$(echo "${{ inputs.aws_region }}" | tr '-' '_')
           S3_BUCKET_NAME_VAR="${REGION_UNDERSCORE}_bucket"
           ALLOCATOR_BASE_URI_VAR="${REGION_UNDERSCORE}_allocator_base_uri"
