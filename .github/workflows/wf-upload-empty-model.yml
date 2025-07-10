@@ -74,6 +74,9 @@ jobs:
           auto-update-conda: true
           python-version: ${{ inputs.python_version }}
 
+      - name: Make script executable
+        run: chmod +x scripts/upload_empty_model.sh
+
       - name: Run upload script
         shell: bash -el {0}
         run: |
