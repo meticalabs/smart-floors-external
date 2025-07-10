@@ -30,18 +30,19 @@ def create_empty_model_artifact(output_tar_file):
     }
 
     # Create a temporary directory to stage the artifact
-    staging_dir = os.path.join(tempfile.mkdtemp(), "empty_model_artifact")
+    tar_file_name = os.path.basename(output_tar_file)
+    staging_dir = os.path.join(tempfile.mkdtemp(), tar_file_name)
 
     try:
         os.makedirs(staging_dir, exist_ok=True)
 
         joblib_file = os.path.join(staging_dir, "predictor.joblib")
         joblib.dump(model_dict, joblib_file)
-        tar_file_name = os.path.basename(output_tar_file)
 
-        # Create the tarball
-        with tarfile.open(os.path.join(staging_dir, tar_file_name), "w:gz") as tar:
-            tar.add(joblib_file, arcname="predictor.joblib")
+        # Create the tarball of the staging directory
+        with tarfile.open(output_tar_file, "w:gz") as tar:
+            tar.add(staging_dir, arcname=os.path.basename(staging_dir))
+
 
         print(f"Empty model artifact created at: {output_tar_file}")
 
