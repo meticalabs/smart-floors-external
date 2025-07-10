@@ -1,13 +1,12 @@
 #!/bin/bash
 
 # This script generates an empty model artifact, uploads it to a specified S3 location,
-# and optionally updates the allocator service.
+# and optionally updates the allocator service via a Lambda invocation.
 
 set -e
 
 # Default values
 UPDATE_ALLOCATOR=false
-ALLOCATOR_URI=""
 MODEL_VERSION=""
 
 # Parse command-line arguments
@@ -21,11 +20,6 @@ while [[ "$#" -gt 0 ]]; do
         --update-allocator)
             UPDATE_ALLOCATOR=true
             shift # past argument
-            ;;
-        --allocator-uri)
-            ALLOCATOR_URI="$2"
-            shift # past argument
-            shift # past value
             ;;
         --model-version)
             MODEL_VERSION="$2"
@@ -72,16 +66,17 @@ aws s3 cp "$LOCAL_TAR_PATH" "$S3_FULL_PATH"
 
 # Update the allocator service if the flag is set
 if [ "$UPDATE_ALLOCATOR" = true ]; then
-    if [ -z "$ALLOCATOR_URI" ] || [ -z "$MODEL_VERSION" ]; then
-        echo "Error: --allocator-uri and --model-version are required when using --update-allocator"
+    if [ -z "$MODEL_VERSION" ]; then
+        echo "Error: --model-version is required when using --update-allocator"
         exit 1
     fi
 
+    LAMBDA_NAME="bid-floor-model-update-lambda"
     ENDPOINT_NAME="bid-floor-${MODEL_VERSION//./-}"
     REFERENCE="default_bid_floor"
 
-    echo "Updating allocator service at $ALLOCATOR_URI"
-    echo "Endpoint: $ENDPOINT_NAME, Model: $ARTIFACT_NAME, Reference: $REFERENCE"
+    echo "Invoking Lambda function: $LAMBDA_NAME"
+    echo "Payload: reference=$REFERENCE, endpointName=$ENDPOINT_NAME, modelName=$ARTIFACT_NAME"
 
     PAYLOAD=$(cat <<-END
     {
@@ -92,7 +87,13 @@ if [ "$UPDATE_ALLOCATOR" = true ]; then
 	END
 	)
 
-    curl -X PUT -H "Content-Type: application/json" -d "$PAYLOAD" "$ALLOCATOR_URI"
+    aws lambda invoke \
+        --function-name "$LAMBDA_NAME" \
+        --invocation-type RequestResponse \
+        --payload "$PAYLOAD" \
+        /dev/null
+
+    echo "Lambda invocation complete."
 fi
 
 # Clean up the local file

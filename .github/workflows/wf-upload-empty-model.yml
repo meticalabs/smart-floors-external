@@ -29,8 +29,6 @@ on:
 env:
   us_east_1_bucket: com.metica.dev.dplat.artifacts
   eu_west_1_bucket: com.metica.prod-eu.dplat.artifacts
-  us_east_1_allocator_base_uri: https://services-alb.dev.metica.com/experiments-allocator/api/v1/pipeline/experiment
-  eu_west_1_allocator_base_uri: https://services-alb.prod-eu.metica.com/experiments-allocator/api/v1/pipeline/experiment
   us_east_1_role: ${{ secrets.DEV_AWS_DEPLOY_ROLE }}
   eu_west_1_role: ${{ secrets.PROD_EU_AWS_DEPLOY_ROLE }}
 
@@ -124,8 +122,7 @@ jobs:
           SCRIPT_ARGS="--s3-path $S3_PATH"
 
           if [ "${{ inputs.update_allocator_service }}" == "true" ]; then
-            ALLOCATOR_URI="${ALLOCATOR_BASE_URI}/default_bid_floor/model"
-            SCRIPT_ARGS="$SCRIPT_ARGS --update-allocator --allocator-uri $ALLOCATOR_URI --model-version ${{ inputs.model_version }}"
+            SCRIPT_ARGS="$SCRIPT_ARGS --update-allocator --model-version ${{ inputs.model_version }}"
           fi
 
           chmod +x ./scripts/upload_empty_model.sh
