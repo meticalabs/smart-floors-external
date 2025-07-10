@@ -105,4 +105,5 @@ jobs:
             SCRIPT_ARGS="$SCRIPT_ARGS --update-allocator --allocator-uri $ALLOCATOR_URI --model-version ${{ inputs.model_version }}"
           fi
 
+          chmod +x ./scripts/upload_empty_model.sh
           ./scripts/upload_empty_model.sh $SCRIPT_ARGS
