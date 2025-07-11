@@ -114,7 +114,7 @@ def test_predict_exploration_path():
     # Mock rng_exploration to return a predictable random choice
     predictor.rng_exploration = Mock()
     predictor.rng_exploration.choice.return_value = [[floors_data[0], floors_data[1]]]
-    result = predictor.predict(context, floors_data)
+    result = predictor.predict(context, floors_data, max_ad_units=None)
 
     # There are 3 possible combinations of 2 from 3 (excluding the lowest): (4,3), (4,2), (3,2)
     # The lowest bid floor is 1.0, so we consider 4,3,2. Combinations are (4,3), (4,2), (3,2)
@@ -127,23 +127,24 @@ def test_predict_exploration_path():
     assert pytest.approx(result["propensity"], abs=1e-6) == 1 / 3.0
     assert result["estimates"][0]["predictedBidFloor"] == -1.0
 
+
 def test_add_hardcoded_contexts():
     predictor = Predictor(epsilon=0.5)
     context = pd.Series({"existing_key": "existing_value"})
-    bid_floor_adunit = [{"bidFloor": 10.0}, {"bidFloor": 5.0}]
-    
+    highest_bid_floor_value = 10.0
+    medium_bid_floor_value = 5.0
+
     # Mock datetime.datetime.now to ensure consistent test results
-    with patch('bid_optim_etl_py.applovin_train_runner.datetime') as mock_datetime:
+    with patch("bid_optim_etl_py.applovin_train_runner.datetime") as mock_datetime:
         mock_datetime.datetime.now.return_value = datetime.datetime(2025, 7, 1, 10, 30, 0, tzinfo=datetime.timezone.utc)
 
-        updated_context = predictor.add_hardcoded_contexts(context, bid_floor_adunit)
+        updated_context = predictor.add_hardcoded_contexts(context, highest_bid_floor_value, medium_bid_floor_value)
 
         assert updated_context["existing_key"] == "existing_value"
-        assert updated_context["assignmentDayOfWeek"] == 1 # Tuesday
+        assert updated_context["assignmentDayOfWeek"] == 1  # Tuesday
         assert updated_context["assignmentHourOfDay"] == 10
-        assert updated_context["highestBidFloorValue"] == 10.0
-        assert updated_context["mediumBidFloorValue"] == 5.0
-
+        assert updated_context["highestBidFloorValue"] == highest_bid_floor_value
+        assert updated_context["mediumBidFloorValue"] == medium_bid_floor_value
 
 
 def test_form_response():
@@ -176,13 +177,7 @@ def test_handles_missing_context_fields(mock_xgboost_model):
         epsilon=0.1,
         rng_exploration=Mock(uniform=Mock(return_value=0.5)),
         clf=mock_xgboost_model,
-        features=Features(
-            fields=[
-                Field(name="user.country", dtype="category"),
-                Field(name="highestBidFloorValue", dtype="float32"),
-                Field(name="mediumBidFloorValue", dtype="float32"),
-            ]
-        ),
+        features=features,
         value_replacer=ValueReplacer(valid_values={"user.country": ["US"]}, default_value="other"),
     )
     result = predictor.predict(
@@ -202,8 +197,9 @@ def test_handles_missing_context_fields(mock_xgboost_model):
 def test_adds_hardcoded_context_values():
     predictor = Predictor(epsilon=0.5)
     context = pd.Series({"user.country": "US"})
-    bid_floor_adunit = [{"bidFloor": 5.0}, {"bidFloor": 3.0}]
-    result = predictor.add_hardcoded_contexts(context, bid_floor_adunit)
+    highest_bid_floor_value = 5.0
+    medium_bid_floor_value = 3.0
+    result = predictor.add_hardcoded_contexts(context, highest_bid_floor_value, medium_bid_floor_value)
     now = datetime.datetime.now(datetime.timezone.utc)
     pd.testing.assert_series_equal(
         result,
@@ -223,10 +219,8 @@ def test_handles_empty_context_series():
     predictor = Predictor(epsilon=0.5)
     result = predictor.add_hardcoded_contexts(
         pd.Series({}),
-        [
-            {"bidFloor": 5.0},
-            {"bidFloor": 3.0},
-        ],
+        5.0,
+        3.0,
     )
     now = datetime.datetime.now(datetime.timezone.utc)
     pd.testing.assert_series_equal(
@@ -240,12 +234,6 @@ def test_handles_empty_context_series():
             }
         ),
     )
-
-
-def test_handles_empty_bid_floor_adunit():
-    predictor = Predictor(epsilon=0.5)
-    with pytest.raises(IndexError):
-        predictor.add_hardcoded_contexts(pd.Series({"user.country": "US"}), [])
 
 
 def test_forms_response_with_valid_assignments_and_lowest_bid_floor():
@@ -270,8 +258,8 @@ def test_handles_empty_assignments_list_fill_with_lowest():
         [], {"id": "1", "bidFloor": 1.0}, 0.5, [{"adUnitIds": ["1"], "predictedBidFloor": 1.0}]
     )
     assert result == {
-        "cpmFloorAdUnitIds": ["1"] * 3,
-        "cpmFloorValues": [1.0] * 3,
+        "cpmFloorAdUnitIds": ["1"],
+        "cpmFloorValues": [1.0],
         "propensity": 0.5,
         "estimates": [{"adUnitIds": ["1"], "predictedBidFloor": 1.0}],
     }
@@ -309,7 +297,7 @@ def test_predict_model_present_random_not_triggered():
     expected_response = {
         "cpmFloorAdUnitIds": ["4", "3", "1"],
         "cpmFloorValues": [4.0, 3.0, 1.0],
-        "propensity": pytest.approx(0.9333, abs=1e-4),
+        "propensity": 0.9333333333333333,  # 2/3 since we are not triggering random choice
         "estimates": [
             {
                 "adUnitIds": [
@@ -399,8 +387,7 @@ def test_predict_model_present_random_triggered_is_best():
         value_replacer=None,
     )
     context = pd.Series({"user.country": "US"})
-    result = predictor.predict(context, floors)
-    print(result)
+    result = predictor.predict(context, floors, max_ad_units=None)
     expected_response = {
         "cpmFloorAdUnitIds": ["4", "3", "1"],
         "cpmFloorValues": [4.0, 3.0, 1.0],
@@ -448,7 +435,7 @@ def test_predict_model_with_series_ad_units():
     )
     context = pd.Series({"user.country": "US"})
     floors_series = [pd.Series(floor) for floor in floors]
-    result = predictor.predict(context, floors_series)
+    result = predictor.predict(context, floors_series, max_ad_units=None)
     expected_response = {
         "cpmFloorAdUnitIds": ["4", "3", "1"],
         "cpmFloorValues": [4.0, 3.0, 1.0],
@@ -478,3 +465,76 @@ def test_predict_model_with_series_ad_units():
         ],
     }
     assert result == expected_response
+
+
+@pytest.mark.parametrize(
+    "max_ad_units, expected_num_ad_units, expected_propensity, mock_choice, "
+    "expected_ad_unit_ids, expected_ad_unit_values",
+    [
+        (1, 1, 1.0, None, ["1"], [1.0]),
+        (
+            2,
+            2,
+            1 / 3.0,
+            [[{"name": "metica_ad_unit_4", "id": "4", "bidFloor": 4.0}]],
+            ["4", "1"],
+            [4.0, 1.0],
+        ),
+        (
+            3,
+            3,
+            1 / 3.0,
+            [
+                [
+                    {"name": "metica_ad_unit_4", "id": "4", "bidFloor": 4.0},
+                    {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
+                ]
+            ],
+            ["4", "3", "1"],
+            [4.0, 3.0, 1.0],
+        ),
+        (
+            4,
+            3,
+            1 / 3.0,
+            [
+                [
+                    {"name": "metica_ad_unit_4", "id": "4", "bidFloor": 4.0},
+                    {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
+                ]
+            ],
+            ["4", "3", "1"],
+            [4.0, 3.0, 1.0],
+        ),
+    ],
+)
+def test_predict_with_max_ad_units_parameter(
+    max_ad_units,
+    expected_num_ad_units,
+    expected_propensity,
+    mock_choice,
+    expected_ad_unit_ids,
+    expected_ad_unit_values,
+):
+    """
+    Tests the predict method with different values for maxAdUnits.
+    """
+    predictor = Predictor(epsilon=0.5)
+    context = pd.Series({"user.country": "US"})
+    floors_data = [
+        {"name": "metica_ad_unit_4", "id": "4", "bidFloor": 4.0},
+        {"name": "metica_ad_unit_3", "id": "3", "bidFloor": 3.0},
+        {"name": "metica_ad_unit_2", "id": "2", "bidFloor": 2.0},
+        {"name": "metica_ad_unit_1", "id": "1", "bidFloor": 1.0},
+    ]
+    if mock_choice:
+        predictor.rng_exploration = Mock()
+        predictor.rng_exploration.choice.return_value = mock_choice
+
+    result = predictor.predict(context, floors_data, max_ad_units=max_ad_units)
+
+    assert len(result["cpmFloorAdUnitIds"]) == expected_num_ad_units
+    assert len(result["cpmFloorValues"]) == expected_num_ad_units
+    assert result["cpmFloorAdUnitIds"] == expected_ad_unit_ids
+    assert result["cpmFloorValues"] == expected_ad_unit_values
+    assert pytest.approx(result["propensity"], abs=1e-6) == expected_propensity

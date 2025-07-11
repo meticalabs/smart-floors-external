@@ -277,10 +277,11 @@ class ModelTrainer:
             lambda df: (
                 df[[col for col in columns if col in df.columns]]
                 .apply(
-                    lambda series: series.cat.add_categories([metica_none])
-                    if isinstance(series.dtype, pd.CategoricalDtype)
-                    and metica_none not in series.cat.categories
-                    else series
+                    lambda series: (
+                        series.cat.add_categories([metica_none])
+                        if isinstance(series.dtype, pd.CategoricalDtype) and metica_none not in series.cat.categories
+                        else series
+                    )
                 )
                 .fillna(metica_none)
                 .melt(var_name="column_name", value_name="value")
@@ -626,18 +627,24 @@ class Predictor(BaseModel):
         """
         return sorted(assignments, key=lambda x: int(x["name"].split("_")[-1]), reverse=True)
 
-    def add_hardcoded_contexts(self, context: pd.Series, bid_floor_adunit: list[dict]) -> pd.Series:
+    def add_hardcoded_contexts(
+        self,
+        context: pd.Series,
+        highest_bid_floor_value: Optional[float],
+        medium_bid_floor_value: Optional[float],
+    ) -> pd.Series:
         """
         Adds hardcoded context values to the provided context series.
         :param context: The context series to be modified.
-        :param bid_floor_adunit: List of bid floor ad units to extract values from.
+        :param highest_bid_floor_value: The highest bid floor value to add to context.
+        :param medium_bid_floor_value: The medium bid floor value to add to context.
         :return: The modified context series with hardcoded values added.
         """
         nw = datetime.datetime.now(datetime.timezone.utc)
         context["assignmentDayOfWeek"] = nw.weekday()  # 0-6, Monday-Sunday
         context["assignmentHourOfDay"] = nw.hour
-        context["highestBidFloorValue"] = bid_floor_adunit[0]["bidFloor"]
-        context["mediumBidFloorValue"] = bid_floor_adunit[1]["bidFloor"]
+        context["highestBidFloorValue"] = highest_bid_floor_value
+        context["mediumBidFloorValue"] = medium_bid_floor_value
         return context
 
     def split_based_on_name(self, ad_unit_list: list[dict]) -> Tuple[list[dict], dict]:
@@ -659,30 +666,44 @@ class Predictor(BaseModel):
         """
         Forms the response dictionary with the predicted bid floor and other details.
         :param assignments: List of assignments.
-        :param lowest_bid_floor: The lowest bid floor ad unit.
+        :param lowest_bid_floor: The lowest bid floor value.
         :param propensity: The propensity value.
         :param prediction_estimates: List of prediction estimates for the ad units.
         :return: Response dictionary.
         """
-        ad_units = assignments + [lowest_bid_floor]
+        assignments = assignments + [lowest_bid_floor]
 
-        if len(ad_units) < 3:
-            ad_units = ad_units + [lowest_bid_floor] * (3 - len(ad_units))
+        cpm_floor_ad_unit_ids = list(map(lambda x: x["id"], assignments))
+        cpm_floor_values = list(map(lambda x: x["bidFloor"], assignments))
 
         response = {
-            "cpmFloorAdUnitIds": list(map(lambda x: x["id"], ad_units)),
-            "cpmFloorValues": list(map(lambda x: x["bidFloor"], ad_units)),
+            "cpmFloorAdUnitIds": cpm_floor_ad_unit_ids,
+            "cpmFloorValues": cpm_floor_values,
             "propensity": propensity,
             "estimates": prediction_estimates,
         }
         return response
 
-    def predict(self, context: pd.Series, floors: list[pd.Series | dict]) -> dict:
+    def predict(self, context: pd.Series, floors: list[pd.Series | dict], max_ad_units: Optional[int] = None) -> dict:
         floors = [floor.to_dict() if isinstance(floor, pd.Series) else floor for floor in floors]
-        floors_to_predict, lowest_bid_floor = self.split_based_on_name(floors)
-        ad_unit_combinations = [
-            self.sort_by_name_postfix_desc(list(pair)) for pair in itertools.combinations(floors_to_predict, 2)
-        ]
+        lowest_bid_floor = self.sort_by_name_postfix_desc(floors)[-1]
+        floors_to_predict = [f for f in floors if f != lowest_bid_floor]
+
+        if max_ad_units is None or max_ad_units >= 3:
+            # Current logic applies for 3 or more
+            ad_unit_combinations = [
+                self.sort_by_name_postfix_desc(list(pair)) for pair in itertools.combinations(floors_to_predict, 2)
+            ]
+        elif max_ad_units == 2:
+            # If exactly 2, choose 1 from combination, mark as medium bid floor, highest as None
+            ad_unit_combinations = [list(pair) for pair in itertools.combinations(floors_to_predict, 1)]
+        else:
+            return self.form_response(
+                [],
+                lowest_bid_floor,
+                1.0,  # Propensity is 1.0 since we are choosing the only available ad unit
+                [{"adUnitIds": [lowest_bid_floor["id"]], "predictedBidFloor": -1.0}],
+            )
 
         # Shuffle the ad unit combinations to ensure randomness in selection if estimates are same
         self.rng_shuffle.shuffle(ad_unit_combinations)
@@ -701,7 +722,16 @@ class Predictor(BaseModel):
 
         transformed = []
         for ad_unit_list in ad_unit_combinations:
-            with_hardcoded_context = self.add_hardcoded_contexts(context, ad_unit_list)
+            if len(ad_unit_list) >= 2:
+                # Choose the last 2 elements as highest and medium bid floors
+                highest_bid_floor_value = ad_unit_list[-1]["bidFloor"]
+                medium_bid_floor_value = ad_unit_list[-2]["bidFloor"]
+            else:
+                highest_bid_floor_value = None
+                medium_bid_floor_value = ad_unit_list[-1]["bidFloor"]
+            with_hardcoded_context = self.add_hardcoded_contexts(
+                context, highest_bid_floor_value, medium_bid_floor_value
+            )
             transformed.append(with_hardcoded_context.to_dict())
 
         value_replaced = (

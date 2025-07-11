@@ -1,6 +1,7 @@
 import json
 import os.path
 import secrets
+from concurrent.futures import ThreadPoolExecutor
 
 import joblib
 import numpy as np
@@ -36,6 +37,8 @@ class ContextualBanditModelHandler(object):
             "user_id": body["userId"],
             "context_series": context_series,
             "ad_units": body["adUnits"],
+            "max_ad_units": body.get("maxAdUnits"),
+            "reference": body.get("reference", None),
         }
 
     def preprocess(self, request):
@@ -51,24 +54,30 @@ class ContextualBanditModelHandler(object):
                     input_context_vectors.append(self.preprocess_single_request(body))
         return input_context_vectors, is_batch
 
-    def fetch_model(self, model_id):
+    def fetch_model(self, model_id, reference=None):
         if model_id not in self.models:
             raise ValueError(f"Model ID {model_id} not found in contextual models")
-        return self.models[model_id]
+        return self.models[model_id] if reference is None else self.models[reference][model_id]
 
     def handle(self, data, context):
         preprocessed_request, is_batch = self.preprocess(data)
-        output = []
-        for context_data in preprocessed_request:
-            model = self.fetch_model(context_data["model_id"])
-            bid_floor_response = model.predict(context_data["context_series"], context_data["ad_units"])
+
+        def process_context(context_data):
+            model = self.fetch_model(context_data["model_id"], context_data["reference"])
+            bid_floor_response = model.predict(
+                context_data["context_series"], context_data["ad_units"], context_data["max_ad_units"]
+            )
             bid_floor_response.update(
                 {
                     "userId": context_data["user_id"],
                     "modelId": context_data["model_id"],
+                    "reference": context_data.get("reference", None),
                 }
             )
-            output.append(bid_floor_response)
+            return bid_floor_response
+
+        with ThreadPoolExecutor() as executor:
+            output = list(executor.map(process_context, preprocessed_request))
 
         return [{"allocations": output}] if is_batch else output
 
