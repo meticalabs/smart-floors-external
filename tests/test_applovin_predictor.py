@@ -468,7 +468,8 @@ def test_predict_model_with_series_ad_units():
 
 
 @pytest.mark.parametrize(
-    "max_ad_units, expected_num_ad_units, expected_propensity, mock_choice, expected_ad_unit_ids, expected_ad_unit_values",
+    "max_ad_units, expected_num_ad_units, expected_propensity, mock_choice, "
+    "expected_ad_unit_ids, expected_ad_unit_values",
     [
         (1, 1, 1.0, None, ["1"], [1.0]),
         (
