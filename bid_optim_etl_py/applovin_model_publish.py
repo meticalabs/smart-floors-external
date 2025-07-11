@@ -196,7 +196,7 @@ def publish_model_artifact(
     region, customer_id, app_id, model_ids: [str], date, s3_model_artifact_bucket, bid_floor_version
 ) -> str:
     cw_wrapper = CloudWatchAlerts(region=region).cw_wrapper
-    sagemaker_tar_content = {}
+    sagemaker_tar_content = {app_id: {}}
 
     for model_id in model_ids:
         model_obj = download_model_obj_from_past_date(
@@ -212,7 +212,7 @@ def publish_model_artifact(
             logging.warning(f"Model object for {model_id} not found for date {date}. Skipping.")
             continue
 
-        sagemaker_tar_content[model_id] = model_obj
+        sagemaker_tar_content[app_id].update({model_id: model_obj})
 
     if not sagemaker_tar_content:
         raise ApplovinETLException("No model artifacts found to publish.")
