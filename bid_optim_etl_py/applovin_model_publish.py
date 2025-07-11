@@ -212,7 +212,7 @@ def publish_model_artifact(
             logging.warning(f"Model object for {model_id} not found for date {date}. Skipping.")
             continue
 
-        sagemaker_tar_content[app_id].update({model_id: model_obj})
+        sagemaker_tar_content[str(app_id)].update({model_id: model_obj})
 
     if not sagemaker_tar_content:
         raise ApplovinETLException("No model artifacts found to publish.")
