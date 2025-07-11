@@ -301,16 +301,22 @@ class TestApplovinETL:
         )
         # fmt:off
         data = [
+            # Test case 1: Array with 3 elements
             Row(eventTime=datetime(2023,1,1,1,0,0), cpmFloorValues=[0.5, 0.3, 0.1]),
-            Row(eventTime=datetime(2023,1,2,23,0,0), cpmFloorValues=[0.7, 0.4, 0.1]),
-            Row(eventTime=datetime(2023,1,3,4,10,0), cpmFloorValues=[0.8, 0.2, 0.1]),
+            # Test case 2: Array with 2 elements
+            Row(eventTime=datetime(2023,1,2,23,0,0), cpmFloorValues=[0.7, 0.4]),
+            # Test case 3: Array with 1 element
+            Row(eventTime=datetime(2023,1,3,4,10,0), cpmFloorValues=[0.8]),
+            # Test case 4: Empty array
+            Row(eventTime=datetime(2023,1,4,5,0,0), cpmFloorValues=[]),
+            # Test case 5: Array with more than 3 elements
+            Row(eventTime=datetime(2023,1,5,6,0,0), cpmFloorValues=[0.9, 0.8, 0.7, 0.6, 0.5]),
         ]
         # fmt: on
         return spark.createDataFrame(data, schema=schema)
 
     def test_add_hardcoded_contexts(self, df_to_test_hardcoded_contexts, events_instance):
         df = events_instance.add_hardcoded_contexts(df_to_test_hardcoded_contexts)
-        df.show(truncate=False)
         expected_columns = [
             Schema.EVENT_TIME,
             Schema.CPM_FLOOR_VALUES,
@@ -321,44 +327,57 @@ class TestApplovinETL:
         ]
 
         assert all(col in df.columns for col in expected_columns)
-        result = df.collect()
 
-        for row in result:
-            assert isinstance(row[Schema.ASSIGNMENT_HOUR_OF_DAY], int)
-            assert 0 <= row[Schema.ASSIGNMENT_HOUR_OF_DAY] <= 23
-            assert isinstance(row[Schema.ASSIGNMENT_DAY_OF_WEEK], int)
-            assert 0 <= row[Schema.ASSIGNMENT_DAY_OF_WEEK] <= 6
-            assert isinstance(row[Schema.HIGHEST_BID_FLOOR_VALUE], float)
-            assert isinstance(row[Schema.MEDIUM_BID_FLOOR_VALUE], float)
+        result = df.orderBy(Schema.EVENT_TIME).collect()
 
-        assert all(row[Schema.HIGHEST_BID_FLOOR_VALUE] >= row[Schema.MEDIUM_BID_FLOOR_VALUE] for row in result)
-
-        assert result == [
+        expected_data = [
             Row(
-                eventTime=datetime(2023, 1, 1, 1, 0, 0),
+                eventTime=datetime(2023, 1, 1, 1, 0),
                 cpmFloorValues=[0.5, 0.3, 0.1],
                 assignmentHourOfDay=1,
                 assignmentDayOfWeek=6,
-                highestBidFloorValue=0.5,
-                mediumBidFloorValue=0.3,
+                highestBidFloorValue=0.3,
+                mediumBidFloorValue=0.5,
             ),
             Row(
-                eventTime=datetime(2023, 1, 2, 23, 0, 0),
-                cpmFloorValues=[0.7, 0.4, 0.1],
+                eventTime=datetime(2023, 1, 2, 23, 0),
+                cpmFloorValues=[0.7, 0.4],
                 assignmentHourOfDay=23,
                 assignmentDayOfWeek=0,
                 highestBidFloorValue=0.7,
-                mediumBidFloorValue=0.4,
+                mediumBidFloorValue=None,
             ),
             Row(
-                eventTime=datetime(2023, 1, 3, 4, 10, 0),
-                cpmFloorValues=[0.8, 0.2, 0.1],
+                eventTime=datetime(2023, 1, 3, 4, 10),
+                cpmFloorValues=[0.8],
                 assignmentHourOfDay=4,
                 assignmentDayOfWeek=1,
-                highestBidFloorValue=0.8,
-                mediumBidFloorValue=0.2,
+                highestBidFloorValue=None,
+                mediumBidFloorValue=None,
+            ),
+            Row(
+                eventTime=datetime(2023, 1, 4, 5, 0),
+                cpmFloorValues=[],
+                assignmentHourOfDay=5,
+                assignmentDayOfWeek=2,
+                highestBidFloorValue=None,
+                mediumBidFloorValue=None,
+            ),
+            Row(
+                eventTime=datetime(2023, 1, 5, 6, 0),
+                cpmFloorValues=[0.9, 0.8, 0.7, 0.6, 0.5],
+                assignmentHourOfDay=6,
+                assignmentDayOfWeek=3,
+                highestBidFloorValue=0.6,
+                mediumBidFloorValue=0.7,
             ),
         ]
+
+        # Convert to list of dictionaries for easier comparison
+        result_dicts = [row.asDict(recursive=True) for row in result]
+        expected_dicts = [row.asDict(recursive=True) for row in expected_data]
+
+        assert result_dicts == expected_dicts
 
     def test_fetch_assignment_events_filter_conditions(self, events_instance, spark):
         schema = StructType(
@@ -371,7 +390,11 @@ class TestApplovinETL:
         data = [
             Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], date="2022-12-31"),  # Valid
             Row(context=None, cpmFloorValues=[1.0, 2.0, 3.0], date="2022-12-31"),  # Invalid: Context is null
-            Row(context="{}", cpmFloorValues=[1.0, 2.0], date="2022-12-31"),  # Invalid: Less than 3 values
+            Row(context="", cpmFloorValues=[1.0, 2.0, 3.0], date="2022-12-31"),  # Invalid: Context is empty string
+            Row(context="{}", cpmFloorValues=[1.0, 2.0], date="2022-12-31"),  # Valid
+            Row(context="{}", cpmFloorValues=[1.0], date="2022-12-31"),  # Valid
+            Row(context="{}", cpmFloorValues=[], date="2022-12-31"),  # Valid
+            Row(context="{}", cpmFloorValues=None, date="2022-12-31"),  # Invalid: cpmFloorValues is null
             Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], date="2023-01-02"),  # Invalid: Date out of range
         ]
         df = spark.createDataFrame(data, schema)
@@ -381,7 +404,7 @@ class TestApplovinETL:
             & events_instance.valid_context_values()
             & events_instance.has_valid_bid_floor_values()
         )
-        assert filtered_df.count() == 1
+        assert filtered_df.count() == 4
 
     def test_fetch_revenue_events_filter_conditions(self, events_instance, spark):
         schema = StructType(

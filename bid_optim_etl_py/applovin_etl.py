@@ -125,7 +125,7 @@ class Events:
             raise ApplovinETLException(f"Error reading parquet file from {path}: {e}")
 
     def has_valid_bid_floor_values(self) -> Column:
-        return col(Schema.CPM_FLOOR_VALUES).isNotNull().__and__(F.size(col(Schema.CPM_FLOOR_VALUES)) >= 3)
+        return col(Schema.CPM_FLOOR_VALUES).isNotNull()
 
     def valid_context_values(self) -> Column:
         return col(Schema.CONTEXT).isNotNull().__and__(col(Schema.CONTEXT).__ne__(""))
@@ -138,8 +138,8 @@ class Events:
             {
                 Schema.ASSIGNMENT_HOUR_OF_DAY: hour(col(Schema.EVENT_TIME).cast("timestamp")),
                 Schema.ASSIGNMENT_DAY_OF_WEEK: F.expr(f"weekday({Schema.EVENT_TIME})"),  # 0-6, Monday-Sunday
-                Schema.HIGHEST_BID_FLOOR_VALUE: col(Schema.CPM_FLOOR_VALUES).getItem(0),
-                Schema.MEDIUM_BID_FLOOR_VALUE: col(Schema.CPM_FLOOR_VALUES).getItem(1),
+                Schema.HIGHEST_BID_FLOOR_VALUE: F.element_at(col(Schema.CPM_FLOOR_VALUES), -2),
+                Schema.MEDIUM_BID_FLOOR_VALUE: F.element_at(col(Schema.CPM_FLOOR_VALUES), -3),
             }
         )
 
