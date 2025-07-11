@@ -1,5 +1,5 @@
 import dataclasses
-from typing import List, Any
+from typing import List, Any, Optional
 
 import requests
 from pydantic import BaseModel, field_validator
@@ -16,6 +16,7 @@ class Context:
 class ETLConfig:
     context: List[Context]
     lookbackWindowInDays: int = dataclasses.field(default=30)
+    maxAdUnits: Optional[int] = None
 
     @field_validator("context", mode="after")
     @classmethod

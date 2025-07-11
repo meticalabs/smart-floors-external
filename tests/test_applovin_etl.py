@@ -170,6 +170,41 @@ class TestApplovinETL:
                     {"path": "user.mostRecentAdRevenue", "dataType": "number"},
                 ],
                 "lookbackWindowInDays": 30,
+                "maxAdUnits": 3,
+            }
+        )
+
+        return Events(
+            customer_id=123,
+            app_id=456,
+            s3_data_bucket="s3://example-bucket",
+            date=datetime(2023, 1, 1).date(),
+            spark=spark,
+            iceberg_catalog="example_catalog",
+            region_name="us-east-1",
+            logger=logging.getLogger("bid_optim_etl_py.applovin_etl"),
+            management_api=mock_management_api,
+        )
+
+    @pytest.fixture
+    def events_instance_with_max_ad_units(self, config, spark, max_ad_units_value):
+        mock_management_api = mock.Mock()
+        mock_management_api.fetch_etl_config.return_value = ETLConfig(
+            **{
+                "context": [
+                    {"path": "user.country", "dataType": "string"},
+                    {"path": "user.languageCode", "dataType": "string"},
+                    {"path": "user.deviceType", "dataType": "string"},
+                    {"path": "user.osVersion", "dataType": "string"},
+                    {"path": "user.deviceModel", "dataType": "string"},
+                    {"path": "user.minRevenueLast24Hours", "dataType": "number"},
+                    {"path": "user.avgRevenueLast24Hours", "dataType": "number"},
+                    {"path": "user.avgRevenueLast48Hours", "dataType": "number"},
+                    {"path": "user.avgRevenueLast72Hours", "dataType": "number"},
+                    {"path": "user.mostRecentAdRevenue", "dataType": "number"},
+                ],
+                "lookbackWindowInDays": 30,
+                "maxAdUnits": max_ad_units_value,
             }
         )
 
@@ -379,7 +414,8 @@ class TestApplovinETL:
 
         assert result_dicts == expected_dicts
 
-    def test_fetch_assignment_events_filter_conditions(self, events_instance, spark):
+    @pytest.mark.parametrize("max_ad_units_value, expected_count", [(3, 1), (2, 2), (1, 3), (None, 1)])
+    def test_fetch_assignment_events_filter_conditions(self, events_instance_with_max_ad_units, spark, max_ad_units_value, expected_count):
         schema = StructType(
             [
                 StructField("context", StringType(), True),
@@ -388,23 +424,23 @@ class TestApplovinETL:
             ]
         )
         data = [
-            Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], date="2022-12-31"),  # Valid
+            Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], date="2022-12-31"),  # Valid for maxAdUnits <= 3
             Row(context=None, cpmFloorValues=[1.0, 2.0, 3.0], date="2022-12-31"),  # Invalid: Context is null
             Row(context="", cpmFloorValues=[1.0, 2.0, 3.0], date="2022-12-31"),  # Invalid: Context is empty string
-            Row(context="{}", cpmFloorValues=[1.0, 2.0], date="2022-12-31"),  # Valid
-            Row(context="{}", cpmFloorValues=[1.0], date="2022-12-31"),  # Valid
-            Row(context="{}", cpmFloorValues=[], date="2022-12-31"),  # Valid
+            Row(context="{}", cpmFloorValues=[1.0, 2.0], date="2022-12-31"),  # Valid for maxAdUnits <= 2
+            Row(context="{}", cpmFloorValues=[1.0], date="2022-12-31"),  # Valid for maxAdUnits <= 1
+            Row(context="{}", cpmFloorValues=[], date="2022-12-31"),  # Valid for maxAdUnits <= 0 (or any)
             Row(context="{}", cpmFloorValues=None, date="2022-12-31"),  # Invalid: cpmFloorValues is null
             Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], date="2023-01-02"),  # Invalid: Date out of range
         ]
         df = spark.createDataFrame(data, schema)
 
         filtered_df = df.filter(
-            (df.date <= events_instance.date.isoformat())
-            & events_instance.valid_context_values()
-            & events_instance.has_valid_bid_floor_values()
+            (df.date <= events_instance_with_max_ad_units.date.isoformat())
+            & events_instance_with_max_ad_units.valid_context_values()
+            & events_instance_with_max_ad_units.has_valid_bid_floor_values()
         )
-        assert filtered_df.count() == 4
+        assert filtered_df.count() == expected_count
 
     def test_fetch_revenue_events_filter_conditions(self, events_instance, spark):
         schema = StructType(

@@ -89,17 +89,19 @@ class Events:
             Schema.DATE,
         ]
 
+        self.etl_config = self.management_api.fetch_etl_config(app_id=self.app_id)
+        self.max_ad_units = self.etl_config.maxAdUnits if self.etl_config.maxAdUnits is not None else 3
+        self.logger.info(f"Fetched ETL config for app {self.app_id}: {self.etl_config}")
+
     def fetch_context_schema(self):
-        etl_config = self.management_api.fetch_etl_config(app_id=self.app_id)
-        self.logger.info(f"Fetched ETL config for app {self.app_id}: {etl_config}")
         context_schema = StructType([])
-        if etl_config.context:
+        if self.etl_config.context:
             context_schema = StructType(
                 [
                     StructField(
                         context.path, StringType() if context.dataType.lower() == "string" else DoubleType(), True
                     )
-                    for context in etl_config.context
+                    for context in self.etl_config.context
                 ]
             )
             self.logger.info(f"Context schema for app {self.app_id}: {context_schema}")
@@ -125,7 +127,7 @@ class Events:
             raise ApplovinETLException(f"Error reading parquet file from {path}: {e}")
 
     def has_valid_bid_floor_values(self) -> Column:
-        return col(Schema.CPM_FLOOR_VALUES).isNotNull()
+        return col(Schema.CPM_FLOOR_VALUES).isNotNull().__and__(F.size(col(Schema.CPM_FLOOR_VALUES)) >= self.max_ad_units)
 
     def valid_context_values(self) -> Column:
         return col(Schema.CONTEXT).isNotNull().__and__(col(Schema.CONTEXT).__ne__(""))
