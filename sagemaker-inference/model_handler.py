@@ -42,8 +42,8 @@ class ContextualBanditModelHandler(object):
             "user_id": body["userId"],
             "context_series": context_series,
             "ad_units": body["adUnits"],
-            "max_ad_units": body.get("maxAdUnits"),
-            "reference": body.get("reference", None),
+            "max_ad_units": body.get("maxAdUnits", None),
+            "reference": body["reference"],
         }
 
     def preprocess(self, request):
@@ -59,10 +59,10 @@ class ContextualBanditModelHandler(object):
                     input_context_vectors.append(self.preprocess_single_request(body))
         return input_context_vectors, is_batch
 
-    def fetch_model(self, model_id, reference=None):
+    def fetch_model(self, model_id, reference):
         if model_id not in self.models:
             raise ValueError(f"Model ID {model_id} not found in contextual models")
-        return self.models[model_id] if reference is None else self.models[reference][model_id]
+        return self.models[reference][model_id]
 
     def handle(self, data, context):
         preprocessed_request, is_batch = self.preprocess(data)
@@ -76,7 +76,7 @@ class ContextualBanditModelHandler(object):
                 {
                     "userId": context_data["user_id"],
                     "modelId": context_data["model_id"],
-                    "reference": context_data.get("reference", None),
+                    "reference": context_data["reference"],
                 }
             )
             return bid_floor_response
