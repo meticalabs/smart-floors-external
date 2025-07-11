@@ -60,7 +60,7 @@ class ContextualBanditModelHandler(object):
         return input_context_vectors, is_batch
 
     def fetch_model(self, model_id, reference):
-        if model_id not in self.models:
+        if model_id not in self.models[reference]:
             raise ValueError(f"Model ID {model_id} not found in contextual models")
         return self.models[reference][model_id]
 
