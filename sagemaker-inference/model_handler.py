@@ -20,7 +20,12 @@ class ContextualBanditModelHandler(object):
         predict_joblib_path = os.path.join(model_dir, f"{model_tar_extracted_dir}/predictor.joblib")
         print(f"Reading the files from {predict_joblib_path}")
         self.models = joblib.load(predict_joblib_path)
-        self.models = {k.lower(): self.update_rng(v) for k, v in self.models.items()}
+        if not isinstance(self.models, dict):
+            raise ValueError("The loaded model is not in the expected dictionary format.")
+        for reference, model_dict in self.models.items():
+            for model_id, model in model_dict.items():
+                print(f"Model {model_id} under reference {reference} has been updated with random generator")
+                self.models[reference][model_id.lower()] = self.update_rng(model)
         print(f"Totals present, [Models : {len(self.models)}]")
 
     def update_rng(self, model):

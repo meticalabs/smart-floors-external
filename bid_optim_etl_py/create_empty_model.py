@@ -28,10 +28,12 @@ def create_empty_model_artifact(output_tar_file):
 
     # Create the dictionary to be saved in the joblib file
     model_dict = {
-        "android_inter": empty_predictor,
-        "android_reward": empty_predictor,
-        "ios_inter": empty_predictor,
-        "ios_reward": empty_predictor,
+        "default_bid_floor": {
+            "android_inter": empty_predictor,
+            "android_reward": empty_predictor,
+            "ios_inter": empty_predictor,
+            "ios_reward": empty_predictor,
+        }
     }
 
     # Create a temporary directory to stage the artifact
