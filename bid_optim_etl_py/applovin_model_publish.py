@@ -196,7 +196,7 @@ def publish_model_artifact(
     region, customer_id, app_id, model_ids: [str], date, s3_model_artifact_bucket, bid_floor_version
 ) -> str:
     cw_wrapper = CloudWatchAlerts(region=region).cw_wrapper
-    sagemaker_tar_content = {app_id: {}}
+    sagemaker_tar_content = {str(app_id): {}}
 
     for model_id in model_ids:
         model_obj = download_model_obj_from_past_date(
