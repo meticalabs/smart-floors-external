@@ -665,6 +665,23 @@ class Predictor(BaseModel):
     ) -> dict:
         """
         Forms the response dictionary with the predicted bid floor and other details.
+
+        The 'estimates' field is condensed to save space. Here's the format:
+        {
+          "u": [
+            [<id>, <name>, <bidFloor>],
+            ...
+          ],
+          "p": [
+            [[<unit_index_1>, <unit_index_2>], <predicted_bid_floor>],
+            ...
+          ]
+        }
+        - "u": A list of unique ad units. Each unit is an array of [id, name, bidFloor].
+        - "p": A list of predictions. Each prediction is an array containing:
+            - A list of indices referencing the ad units in the "u" list.
+            - The predicted bid floor for that combination.
+
         :param assignments: List of assignments.
         :param lowest_bid_floor: The lowest bid floor value.
         :param propensity: The propensity value.
@@ -676,11 +693,32 @@ class Predictor(BaseModel):
         cpm_floor_ad_unit_ids = list(map(lambda x: x["id"], assignments))
         cpm_floor_values = list(map(lambda x: x["bidFloor"], assignments))
 
+        unique_ad_units = {
+            ad_unit["id"]: ad_unit
+            for ad_unit in itertools.chain.from_iterable(est["adUnitIds"] for est in prediction_estimates)
+        }
+
+        unit_list = [
+            [ad_unit["id"], ad_unit["name"], ad_unit["bidFloor"]]
+            for ad_unit in sorted(unique_ad_units.values(), key=lambda x: x["id"])
+        ]
+        unit_to_index = {unit[0]: i for i, unit in enumerate(unit_list)}
+
+        predictions = [
+            [
+                sorted([unit_to_index[ad_unit["id"]] for ad_unit in est["adUnitIds"]]),
+                est["predictedBidFloor"],
+            ]
+            for est in prediction_estimates
+        ]
+
+        estimates = {"u": unit_list, "p": predictions}
+
         response = {
             "cpmFloorAdUnitIds": cpm_floor_ad_unit_ids,
             "cpmFloorValues": cpm_floor_values,
             "propensity": propensity,
-            "estimates": prediction_estimates,
+            "estimates": estimates,
         }
         return response
 
@@ -702,7 +740,7 @@ class Predictor(BaseModel):
                 [],
                 lowest_bid_floor,
                 1.0,  # Propensity is 1.0 since we are choosing the only available ad unit
-                [{"adUnitIds": [lowest_bid_floor["id"]], "predictedBidFloor": -1.0}],
+                [{"adUnitIds": [lowest_bid_floor], "predictedBidFloor": -1.0}],
             )
 
         # Shuffle the ad unit combinations to ensure randomness in selection if estimates are same
@@ -717,7 +755,12 @@ class Predictor(BaseModel):
                 list(assignments[0]),
                 lowest_bid_floor,
                 propensity,
-                [{"adUnitIds": list(assignments[0]), "predictedBidFloor": -1.0}],
+                [
+                    {
+                        "adUnitIds": list(assignments[0]),
+                        "predictedBidFloor": -1.0,
+                    }
+                ],
             )
 
         transformed = []
