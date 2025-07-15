@@ -664,7 +664,7 @@ class Predictor(BaseModel):
         prediction_estimates: list[dict],
     ) -> dict:
         """
-        Forms the response dictionary with the predicted bid floor and other details.
+        Forms the response dictionary with the predicted reward and other details.
 
         The 'estimates' field is condensed to save space. Here's the format:
         {
@@ -673,14 +673,14 @@ class Predictor(BaseModel):
             ...
           ],
           "p": [
-            [[<unit_index_1>, <unit_index_2>], <predicted_bid_floor>],
+            [[<unit_index_1>, <unit_index_2>], <predicted_reward>],
             ...
           ]
         }
         - "u": A list of unique ad units. Each unit is an array of [id, name, bidFloor].
         - "p": A list of predictions. Each prediction is an array containing:
             - A list of indices referencing the ad units in the "u" list.
-            - The predicted bid floor for that combination.
+            - The predicted reward for that combination.
 
         :param assignments: List of assignments.
         :param lowest_bid_floor: The lowest bid floor value.
@@ -704,13 +704,14 @@ class Predictor(BaseModel):
         ]
         unit_to_index = {unit[0]: i for i, unit in enumerate(unit_list)}
 
-        predictions = [
-            [
+        predictions = []
+        for est in prediction_estimates:
+            prediction = [
                 sorted([unit_to_index[ad_unit["id"]] for ad_unit in est["adUnitIds"]]),
-                est["predictedBidFloor"],
             ]
-            for est in prediction_estimates
-        ]
+            if est.get("predictedReward") is not None:
+                prediction.append(est["predictedReward"])
+            predictions.append(prediction)
 
         estimates = {"u": unit_list, "p": predictions}
 
@@ -740,7 +741,7 @@ class Predictor(BaseModel):
                 [],
                 lowest_bid_floor,
                 1.0,  # Propensity is 1.0 since we are choosing the only available ad unit
-                [{"adUnitIds": [lowest_bid_floor], "predictedBidFloor": -1.0}],
+                [{"adUnitIds": [lowest_bid_floor], "predictedReward": None}],
             )
 
         # Shuffle the ad unit combinations to ensure randomness in selection if estimates are same
@@ -758,7 +759,7 @@ class Predictor(BaseModel):
                 [
                     {
                         "adUnitIds": list(assignments[0]),
-                        "predictedBidFloor": -1.0,
+                        "predictedReward": None,
                     }
                 ],
             )
@@ -788,11 +789,11 @@ class Predictor(BaseModel):
         prediction_estimates = [
             {
                 "adUnitIds": list(ad_unit_list),
-                "predictedBidFloor": float(pred),
+                "predictedReward": float(pred),
             }
             for ad_unit_list, pred in zip(ad_unit_combinations, predictions_array)
         ]
-        best_bid_floor_combo = max(prediction_estimates, key=lambda x: x["predictedBidFloor"])
+        best_bid_floor_combo = max(prediction_estimates, key=lambda x: x["predictedReward"])
         propensity = (1 - self.epsilon) + self.epsilon / len(ad_unit_combinations)
 
         if self.rng_exploration.uniform() < self.epsilon:

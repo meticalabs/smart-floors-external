@@ -122,7 +122,7 @@ def test_predict_exploration_path():
     assert result["cpmFloorAdUnitIds"] == ["4", "3", "1"]
     assert result["cpmFloorValues"] == [4.0, 3.0, 1.0]
     assert pytest.approx(result["propensity"], abs=1e-6) == 1 / 3.0
-    assert result["estimates"]["p"][0][1] == -1.0
+    assert len(result["estimates"]["p"][0]) == 1
 
 
 def test_add_hardcoded_contexts():
@@ -158,7 +158,7 @@ def test_form_response():
                 {"id": "A", "name": "ad_unit_A", "bidFloor": 10.0},
                 {"id": "B", "name": "ad_unit_B", "bidFloor": 20.0},
             ],
-            "predictedBidFloor": 15.0,
+            "predictedReward": 15.0,
         }
     ]
 
@@ -258,7 +258,7 @@ def test_forms_response_with_valid_assignments_and_lowest_bid_floor():
                 {"id": "1", "name": "ad_unit_1", "bidFloor": 2.0},
                 {"id": "2", "name": "ad_unit_2", "bidFloor": 3.0},
             ],
-            "predictedBidFloor": 2.0,
+            "predictedReward": 2.0,
         }
     ]
 
@@ -283,7 +283,7 @@ def test_handles_empty_assignments_list_fill_with_lowest():
     prediction_estimates = [
         {
             "adUnitIds": [{"id": "1", "name": "ad_unit_1", "bidFloor": 1.0}],
-            "predictedBidFloor": 1.0,
+            "predictedReward": 1.0,
         }
     ]
 
@@ -308,7 +308,7 @@ def test_handles_missing_lowest_bid_floor():
     prediction_estimates = [
         {
             "adUnitIds": [{"id": "1", "name": "ad_unit_1", "bidFloor": 2.0}],
-            "predictedBidFloor": 2.0,
+            "predictedReward": 2.0,
         }
     ]
 
@@ -324,7 +324,7 @@ def test_handles_empty_assignments_and_missing_lowest_bid_floor():
     prediction_estimates = [
         {
             "adUnitIds": [{"id": "1", "name": "ad_unit_1", "bidFloor": 1.0}],
-            "predictedBidFloor": 1.0,
+            "predictedReward": 1.0,
         }
     ]
 
