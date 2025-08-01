@@ -400,11 +400,20 @@ class ModelTrainer:
             else ray.data.from_items([])
         )
 
-        # Perform 1 / self.weight_column to get the inverse of the weights
+        # Perform 1 / self.weight_column to get the inverse of the weights with defensive handling
+        def safe_weight_inverse(x):
+            propensity = x[self.weight_column]
+            # Handle edge cases: null
+            if propensity is None:
+                # Use default weight of 1.0 for invalid propensity
+                logging.warning(f"Invalid propensity value: {propensity}, using default weight 1.0")
+                return {self.weight_column: 1.0}
+            return {self.weight_column: 1 / propensity}
+        
         if train_weights.count() > 0:
-            train_weights = train_weights.map(lambda x: {self.weight_column: 1 / x[self.weight_column]})
+            train_weights = train_weights.map(safe_weight_inverse)
         if valid_weights.count() > 0:
-            valid_weights = valid_weights.map(lambda x: {self.weight_column: 1 / x[self.weight_column]})
+            valid_weights = valid_weights.map(safe_weight_inverse)
 
         return train_weights, valid_weights
 

@@ -750,3 +750,58 @@ class TestModelTrainingRun:
         )
         assert num_workers_very_large == 4  # Should be capped by available CPUs
         ray.cluster_resources = original_cluster_resources  # Restore original
+
+    def test_get_weights_with_null_propensity(self, model_object):
+        """Test that get_weights handles null propensity values correctly."""
+        # Create test data with various propensity cases
+        test_data = [
+            {"propensity": 0.5, "feature1": 1},      # Valid -> weight = 1/0.5 = 2.0
+            {"propensity": None, "feature1": 2},     # Null propensity -> weight = 1.0 (default)
+            {"propensity": 1.2, "feature1": 3},      # Valid -> weight = 1/1.2 ≈ 0.833
+            {"propensity": 1.0, "feature1": 4},      # Valid -> weight = 1/1.0 = 1.0
+            {"propensity": 0.019444444444444445, "feature1": 5}  # Valid -> weight = 1/0.019... ≈ 51.43
+        ]
+        
+        # Create train and valid datasets
+        train_dataset = ray.data.from_items(test_data)
+        valid_dataset = ray.data.from_items(test_data[:3])  # Just first 3 rows for validation
+        
+        # Get weights using the model's get_weights method
+        train_weights, valid_weights = model_object.get_weights(train_dataset, valid_dataset)
+        
+        # Verify that weights were calculated
+        assert train_weights.count() == 5
+        assert valid_weights.count() == 3
+        
+        # Check the calculated weights
+        train_weights_list = train_weights.to_pandas()["propensity"].tolist()
+        valid_weights_list = valid_weights.to_pandas()["propensity"].tolist()
+        
+        # Expected weights based on simplified logic (only null gets default weight 1.0)
+        expected_train_weights = [
+            2.0,  # 1/0.5
+            1.0,  # null -> default
+            1/1.2,  # 1/1.2 ≈ 0.833
+            1.0,  # 1/1.0
+            1/0.019444444444444445  # ≈ 51.43
+        ]
+        expected_valid_weights = [
+            2.0,  # 1/0.5
+            1.0,  # null -> default  
+            1/1.2  # 1/1.2 ≈ 0.833
+        ]
+        
+        # Assert weights are positive
+        assert all(w > 0 for w in train_weights_list), "All weights should be positive"
+        assert all(w > 0 for w in valid_weights_list), "All validation weights should be positive"
+        
+        # Check specific values (with tolerance for floating point)
+        assert abs(train_weights_list[0] - 2.0) < 0.001
+        assert abs(train_weights_list[1] - 1.0) < 0.001  # null propensity -> default weight 1.0
+        assert abs(train_weights_list[2] - (1/1.2)) < 0.001
+        assert abs(train_weights_list[3] - 1.0) < 0.001
+        assert abs(train_weights_list[4] - (1/0.019444444444444445)) < 0.1
+        
+        assert abs(valid_weights_list[0] - 2.0) < 0.001
+        assert abs(valid_weights_list[1] - 1.0) < 0.001  # null propensity -> default weight 1.0
+        assert abs(valid_weights_list[2] - (1/1.2)) < 0.001
