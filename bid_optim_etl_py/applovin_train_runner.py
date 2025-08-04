@@ -403,8 +403,8 @@ class ModelTrainer:
         # Perform 1 / self.weight_column to get the inverse of the weights with defensive handling
         def safe_weight_inverse(x):
             propensity = x[self.weight_column]
-            # Handle edge cases: null
-            if propensity is None:
+            # Handle edge cases: null, nan
+            if propensity is None or np.isnan(propensity):
                 # Use default weight of 1.0 for invalid propensity
                 logging.warning(f"Invalid propensity value: {propensity}, using default weight 1.0")
                 return {self.weight_column: 1.0}
