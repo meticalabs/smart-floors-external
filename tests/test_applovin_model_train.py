@@ -777,20 +777,6 @@ class TestModelTrainingRun:
         train_weights_list = train_weights.to_pandas()["propensity"].tolist()
         valid_weights_list = valid_weights.to_pandas()["propensity"].tolist()
         
-        # Expected weights based on simplified logic (only null gets default weight 1.0)
-        expected_train_weights = [
-            2.0,  # 1/0.5
-            1.0,  # null -> default
-            1/1.2,  # 1/1.2 ≈ 0.833
-            1.0,  # 1/1.0
-            1/0.019444444444444445  # ≈ 51.43
-        ]
-        expected_valid_weights = [
-            2.0,  # 1/0.5
-            1.0,  # null -> default  
-            1/1.2  # 1/1.2 ≈ 0.833
-        ]
-        
         # Assert weights are positive
         assert all(w > 0 for w in train_weights_list), "All weights should be positive"
         assert all(w > 0 for w in valid_weights_list), "All validation weights should be positive"

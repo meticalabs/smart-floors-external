@@ -415,7 +415,9 @@ class TestApplovinETL:
         assert result_dicts == expected_dicts
 
     @pytest.mark.parametrize("max_ad_units_value, expected_count", [(3, 1), (2, 2), (1, 3), (None, 1)])
-    def test_fetch_assignment_events_filter_conditions(self, events_instance_with_max_ad_units, spark, max_ad_units_value, expected_count):
+    def test_fetch_assignment_events_filter_conditions(
+        self, events_instance_with_max_ad_units, spark, max_ad_units_value, expected_count
+    ):
         schema = StructType(
             [
                 StructField("context", StringType(), True),
@@ -813,34 +815,71 @@ class TestApplovinETL:
 
     def test_fetch_assignment_events_null_propensity_filtering(self, events_instance, spark):
         """Test that assignment events with null propensity values are filtered out."""
-        schema = StructType([
-            StructField("context", StringType(), True),
-            StructField("cpmFloorValues", ArrayType(DoubleType()), True),
-            StructField("propensity", DoubleType(), True),
-            StructField("date", StringType(), True),
-            StructField("eventTime", StringType(), True),
-        ])
-        
+        schema = StructType(
+            [
+                StructField("context", StringType(), True),
+                StructField("cpmFloorValues", ArrayType(DoubleType()), True),
+                StructField("propensity", DoubleType(), True),
+                StructField("date", StringType(), True),
+                StructField("eventTime", StringType(), True),
+            ]
+        )
+
         data = [
-            Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], propensity=0.5, date="2022-12-31", eventTime="2022-12-31T00:00:00Z"),  # Valid
-            Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], propensity=None, date="2022-12-31", eventTime="2022-12-31T00:00:00Z"),  # Invalid: null propensity
-            Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], propensity=0.0, date="2022-12-31", eventTime="2022-12-31T00:00:00Z"),  # Invalid: zero propensity
-            Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], propensity=-0.1, date="2022-12-31", eventTime="2022-12-31T00:00:00Z"),  # Invalid: negative propensity
-            Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], propensity=1.2, date="2022-12-31", eventTime="2022-12-31T00:00:00Z"),  # Valid
-            Row(context="{}", cpmFloorValues=[1.0, 2.0, 3.0], propensity=1.0, date="2022-12-31",
-                eventTime="2022-12-31T00:00:00Z"), # Propensity = 1 valid
+            Row(
+                context="{}",
+                cpmFloorValues=[1.0, 2.0, 3.0],
+                propensity=0.5,
+                date="2022-12-31",
+                eventTime="2022-12-31T00:00:00Z",
+            ),  # Valid
+            Row(
+                context="{}",
+                cpmFloorValues=[1.0, 2.0, 3.0],
+                propensity=None,
+                date="2022-12-31",
+                eventTime="2022-12-31T00:00:00Z",
+            ),  # Invalid: null propensity
+            Row(
+                context="{}",
+                cpmFloorValues=[1.0, 2.0, 3.0],
+                propensity=0.0,
+                date="2022-12-31",
+                eventTime="2022-12-31T00:00:00Z",
+            ),  # Invalid: zero propensity
+            Row(
+                context="{}",
+                cpmFloorValues=[1.0, 2.0, 3.0],
+                propensity=-0.1,
+                date="2022-12-31",
+                eventTime="2022-12-31T00:00:00Z",
+            ),  # Invalid: negative propensity
+            Row(
+                context="{}",
+                cpmFloorValues=[1.0, 2.0, 3.0],
+                propensity=1.2,
+                date="2022-12-31",
+                eventTime="2022-12-31T00:00:00Z",
+            ),  # Valid
+            Row(
+                context="{}",
+                cpmFloorValues=[1.0, 2.0, 3.0],
+                propensity=1.0,
+                date="2022-12-31",
+                eventTime="2022-12-31T00:00:00Z",
+            ),  # Propensity = 1 valid
         ]
         df = spark.createDataFrame(data, schema)
-        
+
         # Mock the read_events_parquet method to return our test data
-        with mock.patch.object(events_instance, 'read_events_parquet', return_value=df):
+        with mock.patch.object(events_instance, "read_events_parquet", return_value=df):
             result_df = events_instance.fetch_assignment_events()
-            
+
         # Should only have 3 valid rows (propensity = 0.5, 1.2, 1.0)
         assert result_df.count() == 3
-        
+
         # Verify that the remaining rows have positive propensity values
-        propensity_values = [row['propensity'] for row in result_df.select('propensity').collect()]
+        propensity_values = [row["propensity"] for row in result_df.select("propensity").collect()]
         assert all(p > 0 for p in propensity_values)
         assert 0.5 in propensity_values
         assert 1.2 in propensity_values
