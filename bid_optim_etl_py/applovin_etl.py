@@ -128,8 +128,9 @@ class Events:
             raise ApplovinETLException(f"Error reading parquet file from {path}: {e}")
 
     def has_valid_bid_floor_values(self) -> Column:
-        return col(Schema.CPM_FLOOR_VALUES).isNotNull().__and__(F.size(col(Schema.CPM_FLOOR_VALUES))
-                                                                >= self.max_ad_units)
+        return (
+            col(Schema.CPM_FLOOR_VALUES).isNotNull().__and__(F.size(col(Schema.CPM_FLOOR_VALUES)) >= self.max_ad_units)
+        )
 
     def valid_context_values(self) -> Column:
         return col(Schema.CONTEXT).isNotNull().__and__(col(Schema.CONTEXT).__ne__(""))
@@ -155,7 +156,7 @@ class Events:
         if assignment_event.isEmpty():
             self.logger.info(f"No assignment events found for date {self.date_iso}.")
             return assignment_event
-        
+
         # Log propensity statistics before filtering
         total_rows = assignment_event.count()
         if total_rows > 0:
@@ -164,28 +165,32 @@ class Events:
                 F.count(F.when(col(Schema.PROPENSITY) > 0, 1)).alias("positive_count"),
                 F.min(col(Schema.PROPENSITY)).alias("min_propensity"),
                 F.max(col(Schema.PROPENSITY)).alias("max_propensity"),
-                F.mean(col(Schema.PROPENSITY)).alias("mean_propensity")
+                F.mean(col(Schema.PROPENSITY)).alias("mean_propensity"),
             ).collect()[0]
-            
-            self.logger.info(f"Propensity statistics before filtering - Total rows: {total_rows}, "
-                           f"Non-null: {propensity_stats['non_null_count']}, "
-                           f"Positive: {propensity_stats['positive_count']}, "
-                           f"Min: {propensity_stats['min_propensity']}, "
-                           f"Max: {propensity_stats['max_propensity']}, "
-                           f"Mean: {propensity_stats['mean_propensity']}")
-        
+
+            self.logger.info(
+                f"Propensity statistics before filtering - Total rows: {total_rows}, "
+                f"Non-null: {propensity_stats['non_null_count']}, "
+                f"Positive: {propensity_stats['positive_count']}, "
+                f"Min: {propensity_stats['min_propensity']}, "
+                f"Max: {propensity_stats['max_propensity']}, "
+                f"Mean: {propensity_stats['mean_propensity']}"
+            )
+
         filtered_events = assignment_event.filter(
-            (col(Schema.DATE) <= self.date_iso) 
-            & self.valid_context_values() 
+            (col(Schema.DATE) <= self.date_iso)
+            & self.valid_context_values()
             & self.has_valid_bid_floor_values()
             & self.valid_propensity_values()
         )
-        
+
         # Log filtering results
         filtered_count = filtered_events.count()
-        self.logger.info(f"Assignment events after filtering: {filtered_count} out of {total_rows} rows retained "
-                        f"({filtered_count/total_rows*100:.1f}% retention rate)")
-        
+        self.logger.info(
+            f"Assignment events after filtering: {filtered_count} out of {total_rows} rows retained "
+            f"({filtered_count/total_rows*100:.1f}% retention rate)"
+        )
+
         return self.add_hardcoded_contexts(filtered_events)
 
     def fetch_revenue_events(self):

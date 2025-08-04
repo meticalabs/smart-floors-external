@@ -409,7 +409,7 @@ class ModelTrainer:
                 logging.warning(f"Invalid propensity value: {propensity}, using default weight 1.0")
                 return {self.weight_column: 1.0}
             return {self.weight_column: 1 / propensity}
-        
+
         if train_weights.count() > 0:
             train_weights = train_weights.map(safe_weight_inverse)
         if valid_weights.count() > 0:

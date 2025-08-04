@@ -58,4 +58,4 @@ format:
 	uv run black .
 
 .PHONY: all
-all:  clean lock install ruff cov build
+all:  clean lock install ruff format cov build
