@@ -129,7 +129,8 @@ class Events:
 
     def has_valid_bid_floor_values(self) -> Column:
         return (
-        col(Schema.CPM_FLOOR_VALUES).isNotNull().__and__(F.size(col(Schema.CPM_FLOOR_VALUES)) >= self.max_ad_units)
+        col(Schema.CPM_FLOOR_VALUES).isNotNull().__and__(
+            F.size(col(Schema.CPM_FLOOR_VALUES)) >= self.max_ad_units)
         )
 
     def valid_context_values(self) -> Column:
