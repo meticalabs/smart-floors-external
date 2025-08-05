@@ -416,7 +416,11 @@ class TestApplovinETL:
 
     @pytest.mark.parametrize("max_ad_units_value, expected_count", [(3, 1), (2, 2), (1, 3), (None, 1)])
     def test_fetch_assignment_events_filter_conditions(
-        self, events_instance_with_max_ad_units, spark, max_ad_units_value, expected_count
+        self,
+        events_instance_with_max_ad_units,
+        spark,
+        max_ad_units_value,
+        expected_count
     ):
         schema = StructType(
             [
