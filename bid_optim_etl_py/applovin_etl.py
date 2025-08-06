@@ -28,7 +28,6 @@ class Schema:
     CPM_FLOOR_AD_UNIT_IDS = "cpmFloorAdUnitIds"
     CPM_FLOOR_VALUE = "cpmFloorValue"
     CPM_FLOOR_VALUES = "cpmFloorValues"
-    PROPENSITY = "propensity"
     DATE = "date"
     LAST_UPDATE_TIME = "lastUpdateTime"
     CUSTOMER_ID = "customerId"
@@ -138,14 +137,6 @@ class Events:
     def valid_revenue_rows(self) -> Column:
         return col(Schema.TOTAL_AMOUNT).isNotNull().__and__(col(Schema.TOTAL_AMOUNT).__ge__(0))
 
-    def valid_propensity_values(self) -> Column:
-        return (
-            col(Schema.PROPENSITY)
-            .isNotNull()
-            .__and__(col(Schema.PROPENSITY).__gt__(0.0))
-            .__and__(col(Schema.PROPENSITY).__le__(1.0))
-        )
-
     def add_hardcoded_contexts(self, df: DataFrame):
         return df.withColumns(
             {
@@ -166,7 +157,6 @@ class Events:
                 (col(Schema.DATE) <= self.date_iso)
                 & self.valid_context_values()
                 & self.has_valid_bid_floor_values()
-                & self.valid_propensity_values()
             )
         )
 
