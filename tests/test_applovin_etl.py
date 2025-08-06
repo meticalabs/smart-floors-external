@@ -864,7 +864,7 @@ class TestApplovinETL:
                 propensity=1.2,
                 date="2022-12-31",
                 eventTime="2022-12-31T00:00:00Z",
-            ),  # Valid
+            ),  # Invalid: propensity > 1
             Row(
                 context="{}",
                 cpmFloorValues=[1.0, 2.0, 3.0],
@@ -879,12 +879,11 @@ class TestApplovinETL:
         with mock.patch.object(events_instance, "read_events_parquet", return_value=df):
             result_df = events_instance.fetch_assignment_events()
 
-        # Should only have 3 valid rows (propensity = 0.5, 1.2, 1.0)
-        assert result_df.count() == 3
+        # Should only have 2 valid rows (propensity = 0.5, 1.0)
+        assert result_df.count() == 2
 
-        # Verify that the remaining rows have positive propensity values
+        # Verify that the remaining rows have valid propensity values (> 0 and <= 1)
         propensity_values = [row["propensity"] for row in result_df.select("propensity").collect()]
-        assert all(p > 0 for p in propensity_values)
+        assert all(0 < p <= 1 for p in propensity_values)
         assert 0.5 in propensity_values
-        assert 1.2 in propensity_values
         assert 1.0 in propensity_values
