@@ -810,3 +810,160 @@ class TestApplovinETL:
         assert result_df.count() == 25
         assert len(result_df.select(Schema.CONTEXT).distinct().collect()) == 15
         assert len(result_df.select(Schema.LIVE_CONTEXT).distinct().collect()) == 25
+
+    def test_fill_with_cached_context_adds_inference_data_column_when_missing(self, spark):
+        """Test that INFERENCE_DATA column is added when missing from the DataFrame."""
+        schema = StructType(
+            [
+                StructField(Schema.USER_ID, StringType(), True),
+                StructField(Schema.CPM_FLOOR_AD_UNIT_IDS, ArrayType(StringType()), True),
+                StructField(Schema.CPM_FLOOR_VALUES, ArrayType(DoubleType()), True),
+                StructField(Schema.EVENT_TIME, StringType(), True),
+                StructField(Schema.CONTEXT, StringType(), True),
+                # Note: INFERENCE_DATA column is intentionally missing
+            ]
+        )
+        data = [
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T00:00:00Z",
+                context="{}",
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T01:00:00Z",
+                context="{}",
+            ),
+        ]
+        df = spark.createDataFrame(data, schema=schema)
+        
+        # Verify INFERENCE_DATA column is missing initially
+        assert Schema.INFERENCE_DATA not in df.columns
+        
+        result_df = fill_with_cached_context(df)
+        
+        # Verify INFERENCE_DATA column is now present
+        assert Schema.INFERENCE_DATA in result_df.columns
+        assert result_df.count() == 2
+        
+        # Verify the column has the correct data type (StringType)
+        inference_data_col = result_df.schema[Schema.INFERENCE_DATA]
+        assert isinstance(inference_data_col.dataType, StringType)
+        
+        # Verify all values are null as expected
+        null_count = result_df.filter(col(Schema.INFERENCE_DATA).isNull()).count()
+        assert null_count == 2
+
+    def test_fill_with_cached_context_preserves_existing_inference_data_column(self, spark):
+        """Test that existing INFERENCE_DATA column is preserved when already present."""
+        schema = StructType(
+            [
+                StructField(Schema.USER_ID, StringType(), True),
+                StructField(Schema.CPM_FLOOR_AD_UNIT_IDS, ArrayType(StringType()), True),
+                StructField(Schema.CPM_FLOOR_VALUES, ArrayType(DoubleType()), True),
+                StructField(Schema.EVENT_TIME, StringType(), True),
+                StructField(Schema.INFERENCE_DATA, StringType(), True),
+                StructField(Schema.CONTEXT, StringType(), True),
+            ]
+        )
+        data = [
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T00:00:00Z",
+                inferenceData="{'endpoint':'test'}",
+                context="{}",
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T01:00:00Z",
+                inferenceData=None,
+                context="{}",
+            ),
+        ]
+        df = spark.createDataFrame(data, schema=schema)
+        
+        # Verify INFERENCE_DATA column exists initially
+        assert Schema.INFERENCE_DATA in df.columns
+        
+        result_df = fill_with_cached_context(df)
+        
+        # Verify INFERENCE_DATA column is still present
+        assert Schema.INFERENCE_DATA in result_df.columns
+        assert result_df.count() == 2
+        
+        # Verify the original values are preserved
+        rows = result_df.orderBy(Schema.EVENT_TIME).collect()
+        assert rows[0][Schema.INFERENCE_DATA] == "{'endpoint':'test'}"
+        assert rows[1][Schema.INFERENCE_DATA] is None
+
+    def test_fill_with_cached_context_handles_none_input(self, spark):
+        """Test that the function raises ValueError when input DataFrame is None."""
+        with pytest.raises(ValueError, match="assignment_df cannot be None"):
+            fill_with_cached_context(None)
+
+    def test_fill_with_cached_context_with_different_inference_data_types(self, spark):
+        """Test that the function handles different types of inference data values correctly."""
+        schema = StructType(
+            [
+                StructField(Schema.USER_ID, StringType(), True),
+                StructField(Schema.CPM_FLOOR_AD_UNIT_IDS, ArrayType(StringType()), True),
+                StructField(Schema.CPM_FLOOR_VALUES, ArrayType(DoubleType()), True),
+                StructField(Schema.EVENT_TIME, StringType(), True),
+                StructField(Schema.INFERENCE_DATA, StringType(), True),
+                StructField(Schema.CONTEXT, StringType(), True),
+            ]
+        )
+        data = [
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T00:00:00Z",
+                inferenceData="{'endpoint':'value1', 'model':'model1'}",
+                context="{}",
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T01:00:00Z",
+                inferenceData="null",  # String "null"
+                context="{}",
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T02:00:00Z",
+                inferenceData="",  # Empty string
+                context="{}",
+            ),
+            Row(
+                userId="U1",
+                cpmFloorAdUnitIds=["ad_unit_1"],
+                cpmFloorValues=[1.0],
+                eventTime="2023-01-01T03:00:00Z",
+                inferenceData=None,  # Actual null
+                context="{}",
+            ),
+        ]
+        df = spark.createDataFrame(data, schema=schema)
+        result_df = fill_with_cached_context(df)
+        
+        assert result_df.count() == 4
+        assert Schema.INFERENCE_DATA in result_df.columns
+        
+        # Verify the function processes all rows correctly
+        rows = result_df.orderBy(Schema.EVENT_TIME).collect()
+        assert rows[0][Schema.INFERENCE_DATA] == "{'endpoint':'value1', 'model':'model1'}"
+        assert rows[1][Schema.INFERENCE_DATA] == "null"
+        assert rows[2][Schema.INFERENCE_DATA] == ""
+        assert rows[3][Schema.INFERENCE_DATA] is None
