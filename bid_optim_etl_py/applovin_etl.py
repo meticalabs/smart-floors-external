@@ -128,8 +128,7 @@ class Events:
 
     def has_valid_bid_floor_values(self) -> Column:
         return (
-            col(Schema.CPM_FLOOR_VALUES).isNotNull()
-            & (F.size(col(Schema.CPM_FLOOR_VALUES)) >= self.max_ad_units)
+            col(Schema.CPM_FLOOR_VALUES).isNotNull().__and__(F.size(col(Schema.CPM_FLOOR_VALUES)) >= self.max_ad_units)
         )
 
     def valid_context_values(self) -> Column:
@@ -239,17 +238,14 @@ def fill_with_cached_context(assignment_df: DataFrame) -> DataFrame:
     """
     if assignment_df is None:
         raise ValueError("assignment_df cannot be None")
-    
+
     if assignment_df.isEmpty():
         return assignment_df
-    
+
     # Ensure INFERENCE_DATA column exists with proper type casting
     if Schema.INFERENCE_DATA not in assignment_df.columns:
-        assignment_df = assignment_df.withColumn(
-            Schema.INFERENCE_DATA, 
-            F.lit(None).cast(StringType())
-        )
-    
+        assignment_df = assignment_df.withColumn(Schema.INFERENCE_DATA, F.lit(None).cast(StringType()))
+
     window_spec = Window.partitionBy(Schema.USER_ID, Schema.CPM_FLOOR_AD_UNIT_IDS).orderBy(Schema.EVENT_TIME)
     is_new_group = "is_new_group"
     group_id = "group_id"

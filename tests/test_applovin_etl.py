@@ -842,20 +842,20 @@ class TestApplovinETL:
             ),
         ]
         df = spark.createDataFrame(data, schema=schema)
-        
+
         # Verify INFERENCE_DATA column is missing initially
         assert Schema.INFERENCE_DATA not in df.columns
-        
+
         result_df = fill_with_cached_context(df)
-        
+
         # Verify INFERENCE_DATA column is now present
         assert Schema.INFERENCE_DATA in result_df.columns
         assert result_df.count() == 2
-        
+
         # Verify the column has the correct data type (StringType)
         inference_data_col = result_df.schema[Schema.INFERENCE_DATA]
         assert isinstance(inference_data_col.dataType, StringType)
-        
+
         # Verify all values are null as expected
         null_count = result_df.filter(col(Schema.INFERENCE_DATA).isNull()).count()
         assert null_count == 2
@@ -891,16 +891,16 @@ class TestApplovinETL:
             ),
         ]
         df = spark.createDataFrame(data, schema=schema)
-        
+
         # Verify INFERENCE_DATA column exists initially
         assert Schema.INFERENCE_DATA in df.columns
-        
+
         result_df = fill_with_cached_context(df)
-        
+
         # Verify INFERENCE_DATA column is still present
         assert Schema.INFERENCE_DATA in result_df.columns
         assert result_df.count() == 2
-        
+
         # Verify the original values are preserved
         rows = result_df.orderBy(Schema.EVENT_TIME).collect()
         assert rows[0][Schema.INFERENCE_DATA] == "{'endpoint':'test'}"
@@ -959,10 +959,10 @@ class TestApplovinETL:
         ]
         df = spark.createDataFrame(data, schema=schema)
         result_df = fill_with_cached_context(df)
-        
+
         assert result_df.count() == 4
         assert Schema.INFERENCE_DATA in result_df.columns
-        
+
         # Verify the function processes all rows correctly
         rows = result_df.orderBy(Schema.EVENT_TIME).collect()
         assert rows[0][Schema.INFERENCE_DATA] == "{'endpoint':'value1', 'model':'model1'}"
