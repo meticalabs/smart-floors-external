@@ -154,7 +154,9 @@ class Events:
             return assignment_event
         return self.add_hardcoded_contexts(
             assignment_event.filter(
-                (col(Schema.DATE) <= self.date_iso) & self.valid_context_values() & self.has_valid_bid_floor_values()
+                (col(Schema.DATE) <= self.date_iso)
+                & self.valid_context_values()
+                & self.has_valid_bid_floor_values()
             )
         )
 
@@ -233,7 +235,7 @@ def fill_with_cached_context(assignment_df: DataFrame) -> DataFrame:
     """
     Fills the assignment DataFrame with cached context values based on the user ID and ad unit IDs.
     :param assignment_df: DataFrame containing assignment events with user ID, ad unit IDs, and context.
-    :return: DataFrame with filled context values
+    :return: DataFrame with filled context values.
     :raises: ValueError if assignment_df is None
     """
     if assignment_df is None:
