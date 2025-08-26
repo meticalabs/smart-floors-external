@@ -55,6 +55,5 @@ class ApplovinModelTrainingArgsParser(CommandLineParser):
         parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
         parser.add_argument("--icebergTrainDataTable", help="Iceberg db table name for training data")
         parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
-        
-        
+
         return parser
