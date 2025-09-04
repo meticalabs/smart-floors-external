@@ -57,15 +57,15 @@ class PercentileCalculator:
 
     def __post_init__(self):
         self.date_iso = self.date.isoformat()
-        
+
         # Calculate cutoff date for event time filtering
         self.cutoff_date = self.date - datetime.timedelta(days=self.cut_off_days)
         self.cutoff_date_iso = self.cutoff_date.isoformat()
-        
+
         self.logger.info(
             f"Using cutoff date: {self.cutoff_date_iso} (looking back {self.cut_off_days} days from {self.date_iso})"
         )
-        
+
         # Columns needed for revenue events
         self.ad_revenue_columns = [
             Schema.REQUEST_ID,
@@ -90,11 +90,13 @@ class PercentileCalculator:
 
     def fetch_context_schema(self):
         """Create a context schema that includes user.country, user.platform, and user.adformat"""
-        context_schema = StructType([
-            StructField(Schema.USER_COUNTRY, StringType(), True),
-            StructField(Schema.USER_PLATFORM, StringType(), True),
-            StructField(Schema.USER_ADFORMAT, StringType(), True)
-        ])
+        context_schema = StructType(
+            [
+                StructField(Schema.USER_COUNTRY, StringType(), True),
+                StructField(Schema.USER_PLATFORM, StringType(), True),
+                StructField(Schema.USER_ADFORMAT, StringType(), True),
+            ]
+        )
         self.logger.info(f"Using context schema for country, platform, and adformat extraction: {context_schema}")
         return context_schema
 
@@ -107,7 +109,7 @@ class PercentileCalculator:
         # Convert s3:// to s3a:// for Spark compatibility
         if path.startswith("s3://"):
             path = path.replace("s3://", "s3a://", 1)
-        
+
         try:
             dataset = self.spark.read.option("mergeSchema", "true").parquet(path)
             return dataset.select(columns) if columns else dataset
@@ -132,12 +134,12 @@ class PercentileCalculator:
         if ad_revenue_event.isEmpty():
             self.logger.info(f"No ad revenue events found for date {self.date_iso}.")
             return ad_revenue_event
-        
+
         # Filter by event time within cutoff days
         return ad_revenue_event.filter(
-            (col(Schema.EVENT_TIME).cast("timestamp").cast("date") >= self.cutoff_date_iso) &
-            (col(Schema.EVENT_TIME).cast("timestamp").cast("date") <= self.date_iso) &
-            self.valid_revenue_rows()
+            (col(Schema.EVENT_TIME).cast("timestamp").cast("date") >= self.cutoff_date_iso)
+            & (col(Schema.EVENT_TIME).cast("timestamp").cast("date") <= self.date_iso)
+            & self.valid_revenue_rows()
         )
 
     def fetch_assignment_events(self):
@@ -146,27 +148,27 @@ class PercentileCalculator:
         if assignment_event.isEmpty():
             self.logger.info(f"No assignment events found for date {self.date_iso}.")
             return assignment_event
-        
+
         # Filter by event time within cutoff days
         return assignment_event.filter(
-            (col(Schema.EVENT_TIME).cast("timestamp").cast("date") >= self.cutoff_date_iso) &
-            (col(Schema.EVENT_TIME).cast("timestamp").cast("date") <= self.date_iso) &
-            self.valid_context_values()
+            (col(Schema.EVENT_TIME).cast("timestamp").cast("date") >= self.cutoff_date_iso)
+            & (col(Schema.EVENT_TIME).cast("timestamp").cast("date") <= self.date_iso)
+            & self.valid_context_values()
         )
 
     def extract_context_fields(self, df: DataFrame, context_schema: StructType):
         """Extract country, platform, and adformat information from context JSON"""
         # Parse the JSON string in the 'context' column
         df = df.withColumn("context_json", from_json(col("context"), context_schema))
-        
+
         # Extract context fields
         df = df.withColumn(Schema.USER_COUNTRY, col("context_json").getItem(Schema.USER_COUNTRY))
         df = df.withColumn(Schema.USER_PLATFORM, col("context_json").getItem(Schema.USER_PLATFORM))
         df = df.withColumn(Schema.USER_ADFORMAT, col("context_json").getItem(Schema.USER_ADFORMAT))
-        
+
         # Drop the intermediate JSON column
         df = df.drop("context_json")
-        
+
         return df
 
     def join_assignment_and_revenue(self, assignment_data: DataFrame, ad_revenue_data: DataFrame):
@@ -189,11 +191,11 @@ class PercentileCalculator:
 
         # Filter out null values for required fields
         df_filtered = df.filter(
-            col(f"`{Schema.USER_COUNTRY}`").isNotNull() &
-            col(f"`{Schema.USER_PLATFORM}`").isNotNull() &
-            col(f"`{Schema.USER_ADFORMAT}`").isNotNull()
+            col(f"`{Schema.USER_COUNTRY}`").isNotNull()
+            & col(f"`{Schema.USER_PLATFORM}`").isNotNull()
+            & col(f"`{Schema.USER_ADFORMAT}`").isNotNull()
         )
-        
+
         # Remove duplicates with the same requestId, keeping the first occurrence
         df_filtered = df_filtered.dropDuplicates([Schema.REQUEST_ID])
         if df_filtered.isEmpty():
@@ -219,52 +221,45 @@ class PercentileCalculator:
         }
 
         result_df = df_filtered.groupBy(
-            col(f"`{Schema.USER_COUNTRY}`"), 
-            col(f"`{Schema.USER_PLATFORM}`"), 
-            col(f"`{Schema.USER_ADFORMAT}`")
+            col(f"`{Schema.USER_COUNTRY}`"), col(f"`{Schema.USER_PLATFORM}`"), col(f"`{Schema.USER_ADFORMAT}`")
         ).agg(*percentile_exprs.values())
-                # Rename columns to match expected output formtry, platform, and adformat
-        result_df = result_df.orderBy(f"`{Schema.USER_COUNTRY}`", f"`{Schema.USER_PLATFORM}`", f"`{Schema.USER_ADFORMAT}`")
-        
+        # Rename columns to match expected output formtry, platform, and adformat
+        result_df = result_df.orderBy(
+            f"`{Schema.USER_COUNTRY}`", f"`{Schema.USER_PLATFORM}`", f"`{Schema.USER_ADFORMAT}`"
+        )
+
         return result_df
 
     def save_to_s3(self, df: DataFrame, output_path: str):
         """Save the percentile results to S3 as CSV"""
         self.logger.info(f"Saving percentile results to S3: {output_path}")
-        
+
         # Convert to Pandas for CSV output (since we expect small result set)
         pandas_df = df.toPandas()
-        
+
         # Save to S3 using boto3
         import boto3
         import io
-        
-        s3_client = boto3.client('s3', region_name=self.region_name)
-        
+
+        s3_client = boto3.client("s3", region_name=self.region_name)
+
         # Convert DataFrame to CSV string
         csv_buffer = io.StringIO()
         pandas_df.to_csv(csv_buffer, index=False)
         csv_content = csv_buffer.getvalue()
-        
+
         # Extract bucket and key from path
-        if output_path.startswith('s3://'):
-            path_parts = output_path[5:].split('/', 1)
+        if output_path.startswith("s3://"):
+            path_parts = output_path[5:].split("/", 1)
             bucket = path_parts[0]
-            key = path_parts[1] if len(path_parts) > 1 else ''
+            key = path_parts[1] if len(path_parts) > 1 else ""
         else:
             raise ApplovinPercentileException(f"Invalid S3 path format: {output_path}")
-        
+
         # Upload to S3
-        s3_client.put_object(
-            Bucket=bucket,
-            Key=key,
-            Body=csv_content,
-            ContentType='text/csv'
-        )
-        
+        s3_client.put_object(Bucket=bucket, Key=key, Body=csv_content, ContentType="text/csv")
+
         self.logger.info(f"Successfully saved percentile results to s3://{bucket}/{key}")
-
-
 
 
 def save_percentiles_to_s3(
@@ -275,14 +270,14 @@ def save_percentiles_to_s3(
         s3_helper = S3Helper()
         today = datetime.datetime.now().strftime("%Y-%m-%d")
         s3_key = format_s3_key(BID_FLOOR_PERCENTILES_PREFIX, customer_id, app_id, today, platform, ad_type)
-        
+
         # Convert DataFrame to Pandas for JSON conversion
         pandas_df = percentiles_df.toPandas()
 
         percentiles_json = pandas_df.to_json(orient="records")
 
         pandas_df.to_csv("tmp.csv", index=False)
-        
+
         s3_path = s3_helper.write_json(S3_ARTIFACTS_BUCKET, s3_key, percentiles_json)
         logger.info(f"Successfully saved percentiles to S3: {s3_path}")
         return s3_path
@@ -320,7 +315,7 @@ def calculate_percentiles(
 
     # Fetch assignment events (for country context)
     assignments = calculator.fetch_assignment_events()
-    
+
     # Fetch revenue events (for total amount)
     ad_revenue_df = calculator.fetch_revenue_events()
 
@@ -331,54 +326,45 @@ def calculate_percentiles(
     # Extract context fields (country, platform, adformat) from context
     context_schema = calculator.fetch_context_schema()
     assignments_with_context = calculator.extract_context_fields(assignments, context_schema)
-    
+
     # Join assignment and revenue data
     joined_data = calculator.join_assignment_and_revenue(assignments_with_context, ad_revenue_df)
-    
+
     if joined_data.isEmpty():
         logger.info("No data after joining assignment and revenue events. Exiting.")
         return
 
     # Calculate percentiles by country, platform, and adformat
     percentile_results = calculator.calculate_percentiles_by_country_platform_adformat(joined_data)
-    
+
     if percentile_results.isEmpty():
         logger.info("No percentile results generated. Exiting.")
         return
 
     # Get unique platform and adformat combinations
     platform_adformat_combinations = (
-        percentile_results
-        .select(f"`{Schema.USER_PLATFORM}`", f"`{Schema.USER_ADFORMAT}`")
-        .distinct()
-        .collect()
+        percentile_results.select(f"`{Schema.USER_PLATFORM}`", f"`{Schema.USER_ADFORMAT}`").distinct().collect()
     )
-    
+
     logger.info(f"Found {platform_adformat_combinations} platform/adformat combinations")
-    
+
     # Save separate files for each platform/adformat combination
     for row in platform_adformat_combinations:
         platform = row[f"{Schema.USER_PLATFORM}"]
         adformat = row[f"{Schema.USER_ADFORMAT}"]
-        
+
         # Filter data for this specific platform/adformat combination
         filtered_data = percentile_results.filter(
-            (col(f"`{Schema.USER_PLATFORM}`") == platform) & 
-            (col(f"`{Schema.USER_ADFORMAT}`") == adformat)
+            (col(f"`{Schema.USER_PLATFORM}`") == platform) & (col(f"`{Schema.USER_ADFORMAT}`") == adformat)
         )
-        
+
         if not filtered_data.isEmpty():
             # Save to S3 using the new function
             s3_path = save_percentiles_to_s3(
-                filtered_data, 
-                calculator.customer_id, 
-                calculator.app_id, 
-                platform, 
-                adformat, 
-                logger
+                filtered_data, calculator.customer_id, calculator.app_id, platform, adformat, logger
             )
             logger.info(f"Saved percentiles for {platform}/{adformat} to: {s3_path}")
-    
+
     logger.info(
         f"Percentile calculation completed successfully for {len(platform_adformat_combinations)} combinations."
     )
@@ -387,9 +373,7 @@ def calculate_percentiles(
 def run(spark: SparkSession, args: [str]):
     """Main entry point for the percentile calculator"""
     try:
-        parsed_args_obj = Initialisation.parse_args(
-            args=args, parser_obj=ApplovinPercentileCalculatorArgsParser()
-        )
+        parsed_args_obj = Initialisation.parse_args(args=args, parser_obj=ApplovinPercentileCalculatorArgsParser())
         logger = Initialisation.fetch_logger(spark, __name__)
         _log_start(logger=logger, args=args)
         config_file = parsed_args_obj.read_config(Path(__file__).parent.joinpath("confs"), ConfigFile)

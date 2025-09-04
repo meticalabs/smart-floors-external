@@ -1,9 +1,7 @@
 import pandas as pd
-import numpy as np
 import re
 import logging
 from typing import List, Dict, Tuple
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +19,14 @@ def convert_to_cpm(df: pd.DataFrame, columns: List[str], multiplier: float = 100
     return df_copy
 
 
-def create_price_points_by_country(percentiles_df: pd.DataFrame, percentile_columns: List[str]) -> Dict[str, List[float]]:
+def create_price_points_by_country(
+    percentiles_df: pd.DataFrame, percentile_columns: List[str]
+) -> Dict[str, List[float]]:
     """Group price points by country and sort by price point (ascending)."""
     price_points_by_country = {}
 
     logger.info(f"Percentiles df columns: {percentiles_df.columns}")
-    
+
     for country in percentiles_df["user.country"].unique():
         country_prices = (
             percentiles_df[percentiles_df["user.country"] == country][percentile_columns]
@@ -37,20 +37,20 @@ def create_price_points_by_country(percentiles_df: pd.DataFrame, percentile_colu
             .to_list()
         )
         price_points_by_country[country] = country_prices
-    
+
     return price_points_by_country
 
 
 def group_countries_by_cpm(country_cpm_pairs: List[Tuple[str, float]]) -> Dict[str, List[str]]:
     """Group countries by CPM value to avoid API deduplication issues."""
     cpm_to_countries = {}
-    
+
     for country, cpm in country_cpm_pairs:
         cpm_str = f"{cpm:.2f}"
         if cpm_str not in cpm_to_countries:
             cpm_to_countries[cpm_str] = []
         cpm_to_countries[cpm_str].append(country)
-    
+
     return cpm_to_countries
 
 
@@ -69,7 +69,7 @@ def create_bid_floor_entry(country_group_name: str, cpm: str, countries: List[st
 def filter_metica_ad_units(ad_units: List[Dict], app_id: str, ad_type: str, exclude_suffix: str = "_1") -> List[Dict]:
     """Filter metica ad units for specific app and ad type, excluding specified suffix."""
     app_ad_units = [unit for unit in ad_units if unit.get("package_name") == app_id]
-    
+
     metica_ad_units = [
         unit
         for unit in app_ad_units
@@ -77,7 +77,7 @@ def filter_metica_ad_units(ad_units: List[Dict], app_id: str, ad_type: str, excl
         and unit.get("ad_format", "").lower() == ad_type.lower()
         and not unit["name"].endswith(exclude_suffix)
     ]
-    
+
     return sorted(metica_ad_units, key=lambda x: extract_numeric_suffix(x["name"]))
 
 
@@ -88,4 +88,7 @@ def format_s3_key(prefix: str, customer_id: int, app_id: int, date_str: str, pla
 
 def format_training_data_prefix(customer_id: int, app_id: int, platform: str, ad_type: str) -> str:
     """Format S3 prefix for training data."""
-    return f"bid-floor-optimisation/applovin/bid_floor_training_data/data/customerId={customer_id}/appId={app_id}/modelId={platform}_{ad_type}/"
+    return (
+        "bid-floor-optimisation/applovin/bid_floor_training_data/data/"
+        f"customerId={customer_id}/appId={app_id}/modelId={platform}_{ad_type}/"
+    )

@@ -1,6 +1,5 @@
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import sys
 from typing import List, Dict
@@ -9,22 +8,28 @@ from etl_py_commons.job_initialiser import Initialisation
 from bid_optim_etl_py.command_line_args import PercentileCalculationArgsParser
 from bid_optim_etl_py.helpers.applovin_management_api_client import ApplovinManagementApiClient
 from bid_optim_etl_py.constants import (
-    APPLOVIN_API_BASE_URL, S3_ARTIFACTS_BUCKET, BID_FLOOR_PERCENTILES_PREFIX,
-    APP_ID_TO_APPLOVIN_ID, DEFAULT_AWS_REGION,
-    PERCENTILE_COLUMNS, CPM_MULTIPLIER, APPLOVIN_MANAGEMENT_API_KEYS
+    APPLOVIN_API_BASE_URL,
+    S3_ARTIFACTS_BUCKET,
+    BID_FLOOR_PERCENTILES_PREFIX,
+    APP_ID_TO_APPLOVIN_ID,
+    DEFAULT_AWS_REGION,
+    PERCENTILE_COLUMNS,
+    CPM_MULTIPLIER,
+    APPLOVIN_MANAGEMENT_API_KEYS,
 )
 from bid_optim_etl_py.helpers.aws_helpers import S3Helper, SecretsManagerHelper
 from bid_optim_etl_py.helpers.data_helpers import (
-    extract_numeric_suffix, convert_to_cpm, create_price_points_by_country,
-    group_countries_by_cpm, create_bid_floor_entry, filter_metica_ad_units,
-    format_s3_key
+    convert_to_cpm,
+    create_price_points_by_country,
+    group_countries_by_cpm,
+    create_bid_floor_entry,
+    filter_metica_ad_units,
+    format_s3_key,
 )
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
 
 
 def get_secret(secret_name: str, region_name: str = DEFAULT_AWS_REGION) -> str:
@@ -43,10 +48,10 @@ def get_bid_floor_percentiles(app_id: int, customer_id: int, ad_type: str, platf
         s3_helper = S3Helper()
         today = datetime.now().strftime("%Y-%m-%d")
         s3_key = format_s3_key(BID_FLOOR_PERCENTILES_PREFIX, customer_id, app_id, today, platform, ad_type)
-        
+
         data = s3_helper.read_json(S3_ARTIFACTS_BUCKET, s3_key)
         percentiles_df = pd.read_json(data, orient="records")
-        
+
         # Convert to CPM
         percentiles_df = convert_to_cpm(percentiles_df, PERCENTILE_COLUMNS, CPM_MULTIPLIER)
 
@@ -54,7 +59,7 @@ def get_bid_floor_percentiles(app_id: int, customer_id: int, ad_type: str, platf
         if "user.country" in percentiles_df.columns:
             percentiles_df = percentiles_df[percentiles_df["user.country"].notnull()]
             percentiles_df = percentiles_df[percentiles_df["user.country"].astype(str).str.strip() != ""]
-        
+
         logger.info(f"Successfully fetched percentiles for app {app_id}, shape: {percentiles_df.shape}")
         return percentiles_df
     except Exception as e:
@@ -70,13 +75,12 @@ def get_metica_ad_units(client: ApplovinManagementApiClient, app_id: int, ad_typ
         ad_units = client.get_ad_units(fields=fields)
 
         metica_ad_units = filter_metica_ad_units(ad_units, APP_ID_TO_APPLOVIN_ID[app_id], ad_type)
-        
+
         app_ad_units = [unit for unit in ad_units if unit.get("package_name") == APP_ID_TO_APPLOVIN_ID[app_id]]
         metica_ad_units_complete = [
             unit
             for unit in app_ad_units
-            if "metica" in unit.get("name", "").lower()
-            and unit.get("ad_format", "").lower() == ad_type.lower()
+            if "metica" in unit.get("name", "").lower() and unit.get("ad_format", "").lower() == ad_type.lower()
         ]
 
         logger.info(f"Found {len(app_ad_units)} ad units for app {app_id}")
@@ -136,7 +140,9 @@ def create_bid_floor_configurations(metica_ad_units: List[Dict], percentiles_df:
         raise
 
 
-def update_bid_floors(client: ApplovinManagementApiClient, ad_unit_configurations: List[Dict], metica_ad_units: List[Dict]) -> List[Dict]:
+def update_bid_floors(
+    client: ApplovinManagementApiClient, ad_unit_configurations: List[Dict], metica_ad_units: List[Dict]
+) -> List[Dict]:
     """Update bid floors for all configured ad units."""
     try:
         logger.info("Updating bid floors for all metica ad units...")
@@ -157,9 +163,7 @@ def update_bid_floors(client: ApplovinManagementApiClient, ad_unit_configuration
 
             try:
                 # Find the original ad unit data
-                original_ad_unit = next(
-                    unit for unit in metica_ad_units if unit["id"] == ad_unit_id
-                )
+                original_ad_unit = next(unit for unit in metica_ad_units if unit["id"] == ad_unit_id)
 
                 # Update the ad unit with new bid floors
                 response = client.update_ad_unit(
@@ -167,7 +171,7 @@ def update_bid_floors(client: ApplovinManagementApiClient, ad_unit_configuration
                 )
 
                 if response.get("success", False) or "id" in response:
-                    logger.info(f"  ✅ Successfully updated bid floors")
+                    logger.info("  ✅ Successfully updated bid floors")
 
                     update_results.append(
                         {
@@ -237,9 +241,7 @@ def run(customer_id: int, app_id: int, ad_type: str = "reward", platform: str = 
         # Get AppLovin API client
 
         api_key = APPLOVIN_MANAGEMENT_API_KEYS[APP_ID_TO_APPLOVIN_ID[app_id]]
-        client = ApplovinManagementApiClient(
-            api_key=api_key, base_url=APPLOVIN_API_BASE_URL
-        )
+        client = ApplovinManagementApiClient(api_key=api_key, base_url=APPLOVIN_API_BASE_URL)
 
         # Get bid floor percentiles
         percentiles_df = get_bid_floor_percentiles(app_id, customer_id, ad_type, platform)
@@ -269,6 +271,7 @@ def run(customer_id: int, app_id: int, ad_type: str = "reward", platform: str = 
 
     except Exception as e:
         import traceback
+
         logger.error(f"Error in run function: {e}\n{traceback.format_exc()}")
         raise
 

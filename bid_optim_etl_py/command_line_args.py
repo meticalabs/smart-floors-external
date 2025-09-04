@@ -71,13 +71,12 @@ class ApplovinPercentileCalculatorArgsParser(CommandLineParser):
         )
         parser.add_argument("--s3DataBucket", help="S3 bucket name for all events and percentile results")
         parser.add_argument(
-            "--cutOffDays", 
-            type=int, 
-            default=7, 
-            help="Number of days to look back from the given date for event time filtering (default: 7)"
+            "--cutOffDays",
+            type=int,
+            default=7,
+            help="Number of days to look back from the given date for event time filtering (default: 7)",
         )
         return parser
-
 
 
 class PercentileCalculationArgsParser(CommandLineParser):
