@@ -106,9 +106,6 @@ class PercentileCalculator:
             f"{sanitise_path(self.s3_data_bucket)}/ingested-events-parquet/"
             f"customerId={self.customer_id}/appId={self.app_id}/{event_name}/"
         )
-        # Convert s3:// to s3a:// for Spark compatibility
-        if path.startswith("s3://"):
-            path = path.replace("s3://", "s3a://", 1)
 
         try:
             dataset = self.spark.read.option("mergeSchema", "true").parquet(path)
