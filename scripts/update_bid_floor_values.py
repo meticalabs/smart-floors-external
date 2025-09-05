@@ -63,8 +63,8 @@ def get_bid_floor_percentiles(app_id: int, customer_id: int, ad_type: str, platf
         logger.info(f"Successfully fetched percentiles for app {app_id}, shape: {percentiles_df.shape}")
         return percentiles_df
     except Exception as e:
-        logger.error(f"Error fetching percentiles from S3: {e}")
-        raise
+        logger.warning(f"Error fetching percentiles from S3: {e}")
+        return pd.DataFrame(columns=[*PERCENTILE_COLUMNS, "user.country"])
 
 
 def get_metica_ad_units(client: ApplovinManagementApiClient, app_id: int, ad_type: str) -> List[Dict]:
