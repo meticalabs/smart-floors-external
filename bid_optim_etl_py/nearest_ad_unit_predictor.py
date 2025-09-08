@@ -30,15 +30,15 @@ def upload_model_file_to_s3(local_model_base_path, model_artifact_path: S3ModelA
     )
 
 
+
 class NearestAdUnitPredictor(BaseModel):
     """
     This model selects the closest ad unit to the price of the previous aggregated units
     """
 
-
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
-    LOW_MULTIPLER: float = 0
-    HIGH_MULTIPLER: float = 1.5
+    LOW_MULTIPLIER: float = 0
+    HIGH_MULTIPLIER: float = 1.5
 
     def sort_by_name_postfix_desc(self, assignments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -130,9 +130,9 @@ class NearestAdUnitPredictor(BaseModel):
             if not candidates:
                 # Only one ad unit, fallback to lowest
                 return self.form_response([], lowest_bid_floor, 1.0)
-            target = context.get('user.avgInterRevenueLast72Hours', 0) * self.HIGH_MULTIPLER
-            # Find the ad unit whose bidFloor * HIGH_MULTIPLER is closest to target
-            best = min(candidates, key=lambda x: abs(x["bidFloor"] * self.HIGH_MULTIPLER - target))
+            target = context.get('user.avgInterRevenueLast72Hours', 0) * self.HIGH_MULTIPLIER
+            # Find the ad unit whose bidFloor * HIGH_MULTIPLIER is closest to target
+            best = min(candidates, key=lambda x: abs(x["bidFloor"] * self.HIGH_MULTIPLIER - target))
             return self.form_response([best], lowest_bid_floor, 1.0)
 
 
