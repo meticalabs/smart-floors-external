@@ -7,6 +7,7 @@ from typing import List, Dict
 from etl_py_commons.job_initialiser import Initialisation
 from bid_optim_etl_py.command_line_args import PercentileCalculationArgsParser
 from bid_optim_etl_py.helpers.applovin_management_api_client import ApplovinManagementApiClient
+from bid_optim_etl_py.helpers.metica_management_api_client import MeticaManagementApiClient
 from bid_optim_etl_py.constants import (
     APPLOVIN_API_BASE_URL,
     S3_ARTIFACTS_BUCKET,
@@ -42,6 +43,29 @@ def get_secret(secret_name: str, region_name: str = DEFAULT_AWS_REGION) -> str:
         raise
 
 
+def update_bid_floor_metica_platform(client: MeticaManagementApiClient, ad_unit_configurations: List[Dict]):
+    """Update metica platform ad units."""
+    try:
+        old_ad_units = client.get_ad_units()
+        for ad_unit in old_ad_units:
+            # Find the matching configuration for this ad unit
+            matching_config = next((unit for unit in ad_unit_configurations if unit["ad_unit_id"] == ad_unit.get("id")), None)
+            if not matching_config:
+                logger.warning(f"No configuration found for ad unit {ad_unit.get('name')}, skipping.")
+                continue
+            bid_floors = matching_config.get("bid_floors")
+            if bid_floors:
+                try:
+                    client.update_ad_unit(ad_unit_id=ad_unit["id"], ad_unit_data=ad_unit, bid_floors=bid_floors)
+                    logger.info(f"Updated bid floor for ad unit {ad_unit['id']}")
+                except Exception as update_exc:
+                    logger.error(f"  ❌ Error updating ad unit {ad_unit['id']}: {str(update_exc)}")
+            else:
+                logger.info(f"No bid floors to update for ad unit {ad_unit['id']}")
+    except Exception as e:
+        logger.error(f"Error updating metica platform ad units: {e}")
+        raise
+
 def get_bid_floor_percentiles(app_id: int, customer_id: int, ad_type: str, platform: str = "android") -> pd.DataFrame:
     """Fetch bid floor percentiles from S3 for the given app, customer, ad_type, and platform."""
     try:
@@ -63,8 +87,8 @@ def get_bid_floor_percentiles(app_id: int, customer_id: int, ad_type: str, platf
         logger.info(f"Successfully fetched percentiles for app {app_id}, shape: {percentiles_df.shape}")
         return percentiles_df
     except Exception as e:
-        logger.warning(f"Error fetching percentiles from S3: {e}")
-        return pd.DataFrame(columns=[*PERCENTILE_COLUMNS, "user.country"])
+        logger.error(f"Error fetching percentiles from S3: {e}")
+        raise
 
 
 def get_metica_ad_units(client: ApplovinManagementApiClient, app_id: int, ad_type: str) -> List[Dict]:
@@ -242,6 +266,7 @@ def run(customer_id: int, app_id: int, ad_type: str = "reward", platform: str = 
 
         api_key = APPLOVIN_MANAGEMENT_API_KEYS[APP_ID_TO_APPLOVIN_ID[app_id]]
         client = ApplovinManagementApiClient(api_key=api_key, base_url=APPLOVIN_API_BASE_URL)
+        metica_client = MeticaManagementApiClient(customer_id=customer_id, app_id=app_id)
 
         # Get bid floor percentiles
         percentiles_df = get_bid_floor_percentiles(app_id, customer_id, ad_type, platform)
@@ -262,7 +287,8 @@ def run(customer_id: int, app_id: int, ad_type: str = "reward", platform: str = 
 
         # Update bid floors
         update_results = update_bid_floors(client, ad_unit_configurations, metica_ad_units)
-
+        # Update bid floors for metica platform
+        update_bid_floor_metica_platform(metica_client, ad_unit_configurations)
         # Print summary
         print_summary(update_results)
 
