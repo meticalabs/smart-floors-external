@@ -66,8 +66,7 @@ class StrategyTrainingArgsParser(CommandLineParser):
         parser.add_argument("--customerId", type=int, help="Customer ID")
         parser.add_argument("--appId", type=int, help="App ID")
         parser.add_argument("--modelId", type=str, help="Model ID")
-        parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
-        parser.add_argument("--icebergTrainDataTable", help="Iceberg db table name for training data")
-        parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
+        parser.add_argument("--strategyName", type=str, help="strategy name")
 
+        parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
         return parser
