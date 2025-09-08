@@ -8,7 +8,9 @@ from typing import List, Dict, Any, Optional, Tuple
 import pandas as pd
 from pydantic import BaseModel, ConfigDict
 from bid_optim_etl_py.utils.management_api import BidFloorManagementAPI, ETLConfig, HttpClient
-
+from bid_optim_etl_py.command_line_args import StrategyTrainingArgsParser
+from etl_py_commons.job_initialiser import Initialisation
+import sys
 
 # --- S3ModelArtifactInfo and upload_model_file_to_s3 moved here to avoid circular import ---
 from dataclasses import dataclass
@@ -167,7 +169,7 @@ def save_nearest_ad_unit_predictor_object(nearest_ad_unit_predictor, args):
 
 def run():
     argvs = sys.argv[1:] if len(sys.argv) > 1 else []
-    parsed_args_obj = Initialisation.parse_args(args=argvs, parser_obj=ApplovinModelTrainingArgsParser())
+    parsed_args_obj = Initialisation.parse_args(args=argvs, parser_obj=StrategyTrainingArgsParser())
     cmd_line_args = parsed_args_obj.parsed_args
     config_file = parsed_args_obj.read_config(
         confs_dir_path=os.path.join(os.path.dirname(__file__), "confs"), config_clazz_type=ConfigFile
@@ -179,22 +181,14 @@ def run():
 
     logging.info(f"ETL Config: {etl_config}")
     logging.info(f"Model Config: {model_config}")
-
-    epsilon = 0.1
-    create_empty_model = True
     
     init_ray_cluster()
-
-
-
-    if create_empty_model:
-        logging.info("Creating empty model as it is requested in the args")
-        save_nearest_ad_unit_predictor_object(
-            nearest_ad_unit_predictor=NearestAdUnitPredictor(
-            ),
-            args=cmd_line_args,
-        )
-        return
+    logging.info("Creating model as it is requested in the args")
+    save_nearest_ad_unit_predictor_object(
+        nearest_ad_unit_predictor=NearestAdUnitPredictor(
+        ),
+        args=cmd_line_args,
+    )
 
 if __name__ == "__main__":
     run()
