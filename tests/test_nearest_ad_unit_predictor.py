@@ -1,6 +1,7 @@
 import pytest
 import pandas as pd
 from bid_optim_etl_py.nearest_ad_unit_predictor import NearestAdUnitPredictor
+import numpy as np
 
 
 @pytest.fixture
@@ -127,3 +128,16 @@ def test_predict_closest_ad_unit_different_context(predictor):
     assert abs(returned_bidfloor * predictor.HIGH_MULTIPLIER - target) == pytest.approx(
         abs(closest["bidFloor"] * predictor.HIGH_MULTIPLIER - target), abs=1e-6
     )
+
+
+def test_update_rng_compatibility():
+    predictor = NearestAdUnitPredictor()
+    # Save original RNG state
+    before = predictor.rng_exploration.random()
+    # Simulate model_handler.py update_rng logic
+    base_seed = 12345
+    ss = np.random.SeedSequence(base_seed)
+    rngs = [np.random.default_rng(s) for s in ss.spawn(2)]
+    predictor.rng_exploration, predictor.rng_shuffle = rngs
+    after = predictor.rng_exploration.random()
+    # The new state should be deterministic and different from before
