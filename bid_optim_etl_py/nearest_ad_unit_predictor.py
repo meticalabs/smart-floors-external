@@ -46,7 +46,11 @@ class NearestAdUnitPredictor(BaseModel):
     LOW_MULTIPLIER: float = 0
     HIGH_MULTIPLIER: float = 1.5
     rng_exploration: SkipValidation[np.random.Generator] = dataclasses.field(
-    default_factory=lambda: np.random.default_rng())
+        default_factory=lambda: np.random.default_rng()
+    )
+    rng_shuffle: SkipValidation[np.random.Generator] = dataclasses.field(
+        default_factory=lambda: np.random.default_rng()
+    )
 
     def sort_by_name_postfix_desc(self, assignments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
