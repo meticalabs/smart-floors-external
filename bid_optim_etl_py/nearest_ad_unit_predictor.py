@@ -153,7 +153,7 @@ def save_nearest_ad_unit_predictor_object(nearest_ad_unit_predictor, args):
     predictor_final_name_with_ext = f"{predictor_file_name}.joblib"
     logging.info(
         f"Saving NearestAdUnitPredictor predictor object to S3: "
-        f"bid_floor_models/{args.date}/{predictor_final_name_with_ext}"
+        f"  bid_floor_models/{args.date}/{predictor_final_name_with_ext}"
     )
 
     save_nearest_ad_unit_predictor_model_to_s3(

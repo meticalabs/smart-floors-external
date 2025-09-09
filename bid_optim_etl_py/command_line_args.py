@@ -37,12 +37,13 @@ class ApplovinModelPublisherArgsParser(CommandLineParser):
         parser.add_argument("--customerId", type=int, help="Customer ID")
         parser.add_argument("--appId", type=int, help="App ID")
         parser.add_argument("--modelIds", nargs="+", type=str, help="Model IDs")
+        parser.add_argument("--strategyName", nargs="+", type=str, help="the strategy names")
         parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
         parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
         parser.add_argument("--bidFloorVersion", help="Bid floor version")
         parser.add_argument("--allocatorServiceUri", help="Allocator service URI")
         return parser
-
+    
 
 class ApplovinModelTrainingArgsParser(CommandLineParser):
     @staticmethod
