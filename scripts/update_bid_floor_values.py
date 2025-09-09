@@ -49,7 +49,11 @@ def update_bid_floor_metica_platform(client: MeticaManagementApiClient, ad_unit_
         old_ad_units = client.get_ad_units()
         for ad_unit in old_ad_units:
             # Find the matching configuration for this ad unit
-            matching_config = next((unit for unit in ad_unit_configurations if unit["ad_unit_id"] == ad_unit.get("id")), None)
+            matching_config = next(
+                (unit for unit in ad_unit_configurations
+                if unit["ad_unit_id"] == ad_unit.get("id")),
+                None
+            )
             if not matching_config:
                 logger.warning(f"No configuration found for ad unit {ad_unit.get('name')}, skipping.")
                 continue
