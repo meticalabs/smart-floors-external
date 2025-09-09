@@ -1,11 +1,14 @@
 import logging
+import dataclasses
+
 import os
 from bid_optim_etl_py.applovin_train_runner import init_ray_cluster
 import joblib
 import datetime
+import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, SkipValidation
 from bid_optim_etl_py.cfg_parser import ConfigFile
 from bid_optim_etl_py.utils.management_api import BidFloorManagementAPI, HttpClient
 from bid_optim_etl_py.command_line_args import StrategyTrainingArgsParser
@@ -42,6 +45,8 @@ class NearestAdUnitPredictor(BaseModel):
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
     LOW_MULTIPLIER: float = 0
     HIGH_MULTIPLIER: float = 1.5
+    rng_exploration: SkipValidation[np.random.Generator] = dataclasses.field(
+    default_factory=lambda: np.random.default_rng())
 
     def sort_by_name_postfix_desc(self, assignments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
