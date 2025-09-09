@@ -8,6 +8,7 @@ def spark(request):
     # https://stackoverflow.com/questions/50168647/multiprocessing-causes-python-to-crash-and-gives-an-error-may-have-been-in-progr
     import os
     from sys import platform
+
     dir_path = os.path.dirname(request.module.__file__)
 
     if platform == "darwin":

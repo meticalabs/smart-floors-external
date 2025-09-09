@@ -5,7 +5,6 @@ import logging
 import os
 import sys
 from typing import Tuple, Optional
-from typing import Any, List, Dict
 
 
 import boto3
@@ -23,7 +22,7 @@ from ray.data import Dataset
 from ray.train import CheckpointConfig, RunConfig, ScalingConfig, Result
 from ray.train.xgboost import RayTrainReportCallback
 from ray.train.xgboost import XGBoostTrainer
-from xgboost import  DMatrix
+from xgboost import DMatrix
 
 from bid_optim_etl_py.cfg_parser import ConfigFile
 from bid_optim_etl_py.command_line_args import ApplovinModelTrainingArgsParser
@@ -867,9 +866,6 @@ def save_predictor_object(predictor: Predictor, args):
             file_name_wo_ext=predictor_file_name,
         ),
     )
-
-
-
 
 
 def run():

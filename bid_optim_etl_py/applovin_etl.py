@@ -152,9 +152,7 @@ class Events:
             return assignment_event
         return self.add_hardcoded_contexts(
             assignment_event.filter(
-                (col(Schema.DATE) <= self.date_iso)
-                & self.valid_context_values()
-                & self.has_valid_bid_floor_values()
+                (col(Schema.DATE) <= self.date_iso) & self.valid_context_values() & self.has_valid_bid_floor_values()
             )
         )
 

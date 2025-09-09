@@ -478,8 +478,9 @@ class TestImpressionCount:
         df_missing = pd.DataFrame(data_missing_col)
         df_missing["category"] = df_missing["category"].astype("category")
 
-        value_replacer_missing = ValueReplacer(valid_values={"category": ["A"], "new_col": [1, 2]},
-                                               default_value="missing_val")
+        value_replacer_missing = ValueReplacer(
+            valid_values={"category": ["A"], "new_col": [1, 2]}, default_value="missing_val"
+        )
         transformed_df_missing = value_replacer_missing.transform(df_missing.copy())
 
         assert "new_col" in transformed_df_missing.columns
@@ -755,50 +756,54 @@ class TestModelTrainingRun:
         """Test that get_weights handles null propensity values correctly."""
         # Create test data with various propensity cases
         test_data = [
-            {"propensity": 0.5, "feature1": 1},      # Valid
-            {"propensity": None, "feature1": 2},     # Null propensity -> weight = 1.0 (default)
-            {"propensity": 1.2, "feature1": 3},      # Valid
-            {"propensity": 1.0, "feature1": 4},      # Valid
-            {"propensity": 0.019444444444444445, "feature1": 5}  # Valid
+            {"propensity": 0.5, "feature1": 1},  # Valid
+            {"propensity": None, "feature1": 2},  # Null propensity -> weight = 1.0 (default)
+            {"propensity": 1.2, "feature1": 3},  # Valid
+            {"propensity": 1.0, "feature1": 4},  # Valid
+            {"propensity": 0.019444444444444445, "feature1": 5},  # Valid
         ]
-        
+
         # Create train and valid datasets
         train_dataset = ray.data.from_items(test_data)
         valid_dataset = ray.data.from_items(test_data[:3])  # first 3 rows for validation
-        
+
         # Get weights using the model's get_weights method
         train_weights, valid_weights = model_object.get_weights(train_dataset, valid_dataset)
-        
+
         # Verify that weights were calculated
         assert train_weights.count() == 5
         assert valid_weights.count() == 3
-        
+
         # Check the calculated weights
         train_weights_list = train_weights.to_pandas()["propensity"].tolist()
         valid_weights_list = valid_weights.to_pandas()["propensity"].tolist()
-        
+
         # Assert weights are positive
         assert all(w > 0 for w in train_weights_list), "All weights should be positive"
         assert all(w > 0 for w in valid_weights_list), "All validation weights should be positive"
-        
+
         # Check that expected weights are present
-        expected_train_weights = {2.0, 1.0, 1/1.2, 1.0, 1/0.019444444444444445}  # Set of expected values
-        expected_valid_weights = {2.0, 1.0, 1/1.2}  # Set of expected values for validation
-        
+        expected_train_weights = {2.0, 1.0, 1 / 1.2, 1.0, 1 / 0.019444444444444445}  # Set of expected values
+        expected_valid_weights = {2.0, 1.0, 1 / 1.2}  # Set of expected values for validation
+
         # Check that all expected weights are present with tolerance
         for expected_weight in expected_train_weights:
-            assert any(abs(actual - expected_weight) < 0.1 for actual in train_weights_list), \
-                f"Expected weight {expected_weight} not found in {train_weights_list}"
-                
+            assert any(
+                abs(actual - expected_weight) < 0.1 for actual in train_weights_list
+            ), f"Expected weight {expected_weight} not found in {train_weights_list}"
+
         for expected_weight in expected_valid_weights:
-            assert any(abs(actual - expected_weight) < 0.1 for actual in valid_weights_list), \
-                f"Expected weight {expected_weight} not found in {valid_weights_list}"
-        
+            assert any(
+                abs(actual - expected_weight) < 0.1 for actual in valid_weights_list
+            ), f"Expected weight {expected_weight} not found in {valid_weights_list}"
+
         # Verify that exactly one weight is 1.0 (the null propensity case)
         null_weights_in_train = [w for w in train_weights_list if abs(w - 1.0) < 0.001]
         null_weights_in_valid = [w for w in valid_weights_list if abs(w - 1.0) < 0.001]
-        
-        assert len(null_weights_in_train) == 2, (f"Expected 2 weights of 1.0 in train set, got "
-                                                 f"{len(null_weights_in_train)}")  # null + 1/1.0
-        assert len(null_weights_in_valid) == 1, (f"Expected 1 weight of 1.0 in valid set, got "
-                                                 f"{len(null_weights_in_valid)}")  # null case
+
+        assert len(null_weights_in_train) == 2, (
+            f"Expected 2 weights of 1.0 in train set, got " f"{len(null_weights_in_train)}"
+        )  # null + 1/1.0
+        assert len(null_weights_in_valid) == 1, (
+            f"Expected 1 weight of 1.0 in valid set, got " f"{len(null_weights_in_valid)}"
+        )  # null case
