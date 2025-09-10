@@ -1,9 +1,6 @@
 import os
-import tempfile
 import joblib
 import json
-import numpy as np
-import pytest
 from bid_optim_etl_py.nearest_ad_unit_predictor import NearestAdUnitPredictor
 import importlib.util
 import sys

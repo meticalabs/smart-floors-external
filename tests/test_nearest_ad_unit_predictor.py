@@ -192,5 +192,6 @@ def test_predictor():
     }
     print()
     predictor = NearestAdUnitPredictor()
-    ret = predictor.predict(test_event['users'][0]['context'], test_event['users'][0]['adUnits'], test_event['users'][0]['maxAdUnits'])
+    ret = predictor.predict(test_event['users'][0]['context'],
+                             test_event['users'][0]['adUnits'], test_event['users'][0]['maxAdUnits'])
     assert ret['cpmFloorValues']== [1.0,0.1]
