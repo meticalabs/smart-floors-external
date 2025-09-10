@@ -143,10 +143,6 @@ class NearestAdUnitPredictor(BaseModel):
             target = context.get("user.avgInterRevenueLast72Hours", 0) * self.HIGH_MULTIPLIER
             # Find the ad unit whose bidFloor * HIGH_MULTIPLIER is closest to target
             best = min(candidates, key=lambda x: abs(x["bidFloor"] - target))
-            # print(f"Best ad unit for nearest match: {best}")
-
-            # print(list(map(lambda x: abs(x["bidFloor"] - target), candidates)))
-            # print(candidates)
             return self.form_response([best], lowest_bid_floor, 1.0)
 
 
