@@ -67,7 +67,7 @@ def test_predict_invalid_max_ad_units(predictor):
 
 def test_predict_closest_ad_unit_different_context(predictor):
     # Different context value
-    context = pd.Series({"user.avgInterRevenueLast72Hours": 1.2})
+    context = pd.Series({"user.avgInterRevenueLast72Hours": 1.2/1000})
     # Ad units with various bid floors
     floors = [
         {"name": "ad_unit_1", "id": "1", "bidFloor": 0.5},
@@ -87,14 +87,13 @@ def test_predict_closest_ad_unit_different_context(predictor):
     target = context["user.avgInterRevenueLast72Hours"] * predictor.HIGH_MULTIPLIER
     closest = min(
         [f for f in floors if f["id"] != lowest["id"]],
-        key=lambda x: abs(x["bidFloor"] * predictor.HIGH_MULTIPLIER - target),
+        key=lambda x: abs(x["bidFloor"] - target),
     )
-    assert abs(returned_bidfloor * predictor.HIGH_MULTIPLIER - target) == pytest.approx(
-        abs(closest["bidFloor"] * predictor.HIGH_MULTIPLIER - target), abs=1e-6
-    )
+    print(f"Returned bid floor: {returned_bidfloor}, Target: {target}, Closest: {closest}")
+    assert abs(returned_bidfloor - 2) == pytest.approx(0, abs=1e-6)
 
     # Context value to match
-    context = pd.Series({"user.avgInterRevenueLast72Hours": 2.7})
+    context = pd.Series({"user.avgInterRevenueLast72Hours": 2.7/1000})
     # Ad units with various bid floors
     floors = [
         {"name": "ad_unit_1", "id": "1", "bidFloor": 1.0},
@@ -123,10 +122,10 @@ def test_predict_closest_ad_unit_different_context(predictor):
     target = context["user.avgInterRevenueLast72Hours"] * predictor.HIGH_MULTIPLIER
     closest = min(
         [f for f in floors if f["id"] != lowest["id"]],
-        key=lambda x: abs(x["bidFloor"] * predictor.HIGH_MULTIPLIER - target),
+        key=lambda x: abs(x["bidFloor"] - target),
     )
-    assert abs(returned_bidfloor * predictor.HIGH_MULTIPLIER - target) == pytest.approx(
-        abs(closest["bidFloor"] * predictor.HIGH_MULTIPLIER - target), abs=1e-6
+    assert abs(returned_bidfloor - target) == pytest.approx(
+        abs(closest["bidFloor"] - target), abs=1e-6
     )
 
 
@@ -141,3 +140,57 @@ def test_update_rng_compatibility():
     predictor.rng_exploration, predictor.rng_shuffle = rngs
     predictor.rng_exploration.random()
     # The new state should be deterministic and different from before
+
+def test_predictor():
+    test_event={
+        "users": [
+            {
+            "context": {
+                "user.minRevenueLast24Hours": 0.001061701551189245,
+                "user.avgRevenueLast24Hours": 0.001061701551189245,
+                "user.avgInterRevenueLast72Hours": 0.001061701551189245,
+                "user.mostRecentAdRevenue": 0.001061701551189245,
+                "user.platform": "android",
+                "user.adformat": "inter",
+                "user.country": "UK",
+                "user.languageCode": "en-US"
+            },
+            "adUnits": [
+                {
+                "id": "8c63ff91a4a47584",
+                "name": "METICA_AD_UNIT_1",
+                "bidFloor": 0.1
+                },
+                {
+                "id": "e6204ff1d59d2894",
+                "name": "METICA_AD_UNIT_2",
+                "bidFloor": 0.5
+                },
+                {
+                "id": "37f4c63d4e3723e6",
+                "name": "METICA_AD_UNIT_3",
+                "bidFloor": 1.0
+                },
+                {
+                "id": "bf648cbdf2a10f2c",
+                "name": "METICA_AD_UNIT_4",
+                "bidFloor": 5.0
+                },
+                {
+                "id": "bde460c060b9a272",
+                "name": "METICA_AD_UNIT_5",
+                "bidFloor": 10.0
+                }
+            ],
+            "userId": "2779d449b8f55162",
+            "modelId": "android_inter",
+            "reference": "15118",
+            "maxAdUnits": 2,
+            "assignmentStickinessInSeconds": 7200
+            }
+        ]
+    }
+    print()
+    predictor = NearestAdUnitPredictor()
+    ret = predictor.predict(test_event['users'][0]['context'], test_event['users'][0]['adUnits'], test_event['users'][0]['maxAdUnits'])
+    assert ret['cpmFloorValues']== [1.0,0.1]

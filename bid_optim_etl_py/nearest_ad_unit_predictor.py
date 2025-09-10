@@ -44,7 +44,7 @@ class NearestAdUnitPredictor(BaseModel):
 
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
     LOW_MULTIPLIER: float = 0
-    HIGH_MULTIPLIER: float = 1.5
+    HIGH_MULTIPLIER: float = 1.5 * 1000 # Convert to CPM
     rng_exploration: SkipValidation[np.random.Generator] = dataclasses.field(
         default_factory=lambda: np.random.default_rng()
     )
@@ -122,6 +122,7 @@ class NearestAdUnitPredictor(BaseModel):
         self, context: pd.Series, floors: List[pd.Series | Dict[str, Any]], max_ad_units: Optional[int] = None
     ) -> Dict[str, Any]:
         floors = [floor.to_dict() if isinstance(floor, pd.Series) else floor for floor in floors]
+        
         if not floors:
             raise ValueError("No ad units provided")
         lowest_bid_floor = self.sort_by_name_postfix_desc(floors)[-1]
@@ -141,7 +142,11 @@ class NearestAdUnitPredictor(BaseModel):
                 return self.form_response([], lowest_bid_floor, 1.0)
             target = context.get("user.avgInterRevenueLast72Hours", 0) * self.HIGH_MULTIPLIER
             # Find the ad unit whose bidFloor * HIGH_MULTIPLIER is closest to target
-            best = min(candidates, key=lambda x: abs(x["bidFloor"] * self.HIGH_MULTIPLIER - target))
+            best = min(candidates, key=lambda x: abs(x["bidFloor"] - target))
+            # print(f"Best ad unit for nearest match: {best}")
+
+            # print(list(map(lambda x: abs(x["bidFloor"] - target), candidates)))
+            # print(candidates)
             return self.form_response([best], lowest_bid_floor, 1.0)
 
 
