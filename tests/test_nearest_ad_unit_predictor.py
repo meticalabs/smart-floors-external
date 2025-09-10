@@ -133,11 +133,11 @@ def test_predict_closest_ad_unit_different_context(predictor):
 def test_update_rng_compatibility():
     predictor = NearestAdUnitPredictor()
     # Save original RNG state
-    before = predictor.rng_exploration.random()
+    predictor.rng_exploration.random()
     # Simulate model_handler.py update_rng logic
     base_seed = 12345
     ss = np.random.SeedSequence(base_seed)
     rngs = [np.random.default_rng(s) for s in ss.spawn(2)]
     predictor.rng_exploration, predictor.rng_shuffle = rngs
-    after = predictor.rng_exploration.random()
+    predictor.rng_exploration.random()
     # The new state should be deterministic and different from before
