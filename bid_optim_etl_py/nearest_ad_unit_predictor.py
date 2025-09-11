@@ -140,7 +140,10 @@ class NearestAdUnitPredictor(BaseModel):
             if not candidates:
                 # Only one ad unit, fallback to lowest
                 return self.form_response([], lowest_bid_floor, 1.0)
-            target = context.get("user.avgInterRevenueLast72Hours", 0) * self.HIGH_MULTIPLIER
+            # Find the context key that ends with 'last72hours' (case-insensitive)
+            last72_key = next((k for k in context.keys() if isinstance(k, str) and k.lower().endswith('last72hours')), None)
+            last72_value = context.get(last72_key, 0) if last72_key else 0
+            target = last72_value * self.HIGH_MULTIPLIER
             # Find the ad unit whose bidFloor * HIGH_MULTIPLIER is closest to target
             best = min(candidates, key=lambda x: abs(x["bidFloor"] - target))
             return self.form_response([best], lowest_bid_floor, 1.0)
@@ -187,8 +190,12 @@ def run():
     )
 
     bid_floor_management_api = BidFloorManagementAPI(http_client=HttpClient(base_url=config_file.managementApiBaseUrl))
-    etl_config = bid_floor_management_api.fetch_etl_config(cmd_line_args.appId)
-    model_config = bid_floor_management_api.fetch_model_config(cmd_line_args.appId, cmd_line_args.modelId)
+    # etl_config = bid_floor_management_api.fetch_etl_config(cmd_line_args.appId)
+    # model_config = bid_floor_management_api.fetch_model_config(cmd_line_args.appId, cmd_line_args.modelId)
+
+    model_config = bid_floor_management_api.fetch_model_config(12101, 'android_inter')
+    etl_config = bid_floor_management_api.fetch_etl_config(12101)
+
 
     logging.info(f"ETL Config: {etl_config}")
     logging.info(f"Model Config: {model_config}")
