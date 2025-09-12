@@ -57,3 +57,35 @@ class ApplovinModelTrainingArgsParser(CommandLineParser):
         parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
 
         return parser
+
+
+class ApplovinPercentileCalculatorArgsParser(CommandLineParser):
+    @staticmethod
+    def parser():
+        parser = argparse.ArgumentParser(description="Run the applovin percentile calculator")
+        parser.add_argument("--customerId", type=int, help="Customer ID")
+        parser.add_argument("--appId", type=int, help="App ID")
+        parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
+        parser.add_argument(
+            "--region", required=True, type=str, help="Region to load config (str). Ex: us-east-1, eu-west-1"
+        )
+        parser.add_argument("--s3DataBucket", help="S3 bucket name for all events and percentile results")
+        parser.add_argument(
+            "--cutOffDays",
+            type=int,
+            default=7,
+            help="Number of days to look back from the given date for event time filtering (default: 7)",
+        )
+        return parser
+
+
+class PercentileCalculationArgsParser(CommandLineParser):
+    @staticmethod
+    def parser():
+        parser = argparse.ArgumentParser(description="Run the distributed percentile calculation")
+        parser.add_argument("--customerId", type=int, required=True, help="Customer ID")
+        parser.add_argument("--appId", type=int, required=True, help="App ID")
+        parser.add_argument("--adType", type=str, default="reward", help="Ad type (reward/inter)")
+        parser.add_argument("--platform", type=str, default="android", help="Platform (android/ios)")
+        parser.add_argument("--cutoffDays", type=int, default=7, help="Number of days to look back for data")
+        return parser
