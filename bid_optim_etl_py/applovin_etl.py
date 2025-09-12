@@ -127,7 +127,9 @@ class Events:
             raise ApplovinETLException(f"Error reading parquet file from {path}: {e}")
 
     def has_valid_bid_floor_values(self) -> Column:
-        return col(Schema.CPM_FLOOR_VALUES).isNotNull()
+        return (
+            col(Schema.CPM_FLOOR_VALUES).isNotNull().__and__(F.size(col(Schema.CPM_FLOOR_VALUES)) >= self.max_ad_units)
+        )
 
     def valid_context_values(self) -> Column:
         return col(Schema.CONTEXT).isNotNull().__and__(col(Schema.CONTEXT).__ne__(""))
