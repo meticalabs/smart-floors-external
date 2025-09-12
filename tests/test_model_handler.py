@@ -20,7 +20,7 @@ test_event={
             "context": {
                 "user.minRevenueLast24Hours": 0.001061701551189245,
                 "user.avgRevenueLast24Hours": 0.001061701551189245,
-                "user.avgInterRevenueLast72Hours": 0.001061701551189245,
+                "user.avgInterRevenueasdLast72Hours": 0.001061701551189245,
                 "user.mostRecentAdRevenue": 0.001061701551189245,
                 "user.platform": "android",
                 "user.adformat": "inter",
@@ -87,6 +87,41 @@ def test_model_handler_with_nearest_ad_unit_predictor(tmp_path):
         handler.initialize(context)
         # Prepare request
         request = [{"body": bytes(json.dumps(test_event), "utf-8") }]
+        result = handler.handle(request, context)
+        allocations = result[0]["allocations"]
+        assert isinstance(allocations, list)
+        assert allocations[0]["userId"] == "2779d449b8f55162"
+        assert allocations[0]["modelId"] == "android_inter"
+        assert allocations[0]["reference"] == "15118"
+        assert allocations[0]["cpmFloorValues"] == [1.0, 0.1]
+        assert allocations[0]["cpmFloorAdUnitIds"] == ["37f4c63d4e3723e6", "8c63ff91a4a47584"]
+        assert "cpmFloorAdUnitIds" in allocations[0]
+    finally:
+        os.listdir = orig_listdir
+
+
+test_event2={"users":[{"context":{"user.mostRecentAdRevenue":0.0027318313121795653,
+                                  "user.avgRevenueLast24Hours":0.0028961799122934977,"user.avgRevenueLast48Hours":0.0030026608816361854,"user.avgInterRevenueLast72Hours":0.0030967666679006293,"user.minRevenueLast24Hours":0.0027318313121795653,"user.platform":"android","user.adformat":"inter","user.country":"TH","user.languageCode":"th-TH"},"adUnits":[{"id":"7bbb83f68ec785d3","name":"metica_android_inter_ad_unit_2","bidFloor":1.57},{"id":"858338ec819b67d9","name":"metica_android_inter_ad_unit_1","bidFloor":0.0},{"id":"7e7ad17cd95a02ba","name":"metica_android_inter_ad_unit_3","bidFloor":2.16},{"id":"683cef55032f769d","name":"metica_android_inter_ad_unit_5","bidFloor":3.29},{"id":"933219224c48cdf9","name":"metica_android_inter_ad_unit_4","bidFloor":2.56},{"id":"1581e40537183296","name":"metica_android_inter_ad_unit_6","bidFloor":4.13}],"userId":"e58e38ea561d7b5c","modelId":"android_inter","reference":"12001","maxAdUnits":2,"assignmentStickinessInSeconds":1800}]}
+
+def test_model_handler_with_nearest_ad_unit_predictor2(tmp_path):
+    # Prepare a fake model dict structure as expected by model_handler
+    predictor = NearestAdUnitPredictor()
+    models = {"12001": {"android_inter": predictor}}
+    # Save the model dict as joblib
+    model_dir = tmp_path / "model"
+    os.makedirs(model_dir)
+    extracted_dir = model_dir / "extracted"
+    os.makedirs(extracted_dir)
+    joblib.dump(models, extracted_dir / "predictor.joblib")
+    # Patch os.listdir to simulate SageMaker extraction
+    orig_listdir = os.listdir
+    os.listdir = lambda d: ["extracted"]
+    try:
+        context = make_fake_context(str(model_dir))
+        handler = model_handler.ContextualBanditModelHandler()
+        handler.initialize(context)
+        # Prepare request
+        request = [{"body": bytes(json.dumps(test_event2), "utf-8") }]
         result = handler.handle(request, context)
         allocations = result[0]["allocations"]
         assert isinstance(allocations, list)
