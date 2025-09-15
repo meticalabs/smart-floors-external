@@ -13,27 +13,13 @@ import requests
 from etl_py_commons.job_initialiser import Initialisation
 
 from bid_optim_etl_py.applovin_train_runner import Predictor, ValueReplacer, Features, Field  # noqa
+from bid_optim_etl_py.nearest_ad_unit_predictor import NearestAdUnitPredictor  # noqa
 from bid_optim_etl_py.command_line_args import ApplovinModelPublisherArgsParser
 from bid_optim_etl_py.cw_publisher import CloudWatchAlerts
 
 
 class ApplovinETLException(Exception):
     pass
-
-
-def arg_parser():
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run the applovin bid floor training")
-    parser.add_argument("--region", help="AWS region where the resources are located", required=True)
-    parser.add_argument("--customerId", type=int, help="Customer ID")
-    parser.add_argument("--appId", type=int, help="App ID")
-    parser.add_argument("--modelIds", nargs="+", type=str, help="Model IDs")
-    parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
-    parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
-    parser.add_argument("--bidFloorVersion", help="Bid floor version")
-    parser.add_argument("--allocatorServiceUri", help="Allocator service URI")
-    return parser.parse_args()
 
 
 @dataclass
@@ -69,11 +55,16 @@ def download_model_artifact_from_s3(
     if file_exists_in_s3(boto3_client, model_artifact_path.bucket, model_artifact_path.key):
         print(f"Model artifact {model_artifact_path} found in s3. Loading predictor object.")
         boto3_client.download_file(model_artifact_path.bucket, model_artifact_path.key, local_model_file_path)
+        print('DEBUG3')
+        print(f"Loading model artifact from {local_model_file_path}")
         return joblib.load(local_model_file_path)
     else:
         if error_if_empty:
             raise ApplovinETLException(f"Model artifact {model_artifact_path} not found in s3.")
         else:
+            print("DEBUG2")
+            print(model_artifact_path.bucket)
+            print(model_artifact_path.key)
             print(f"Model artifact {model_artifact_path} not found in s3. Returning None.")
             return None
 
@@ -108,12 +99,13 @@ def empty_model(model_obj):
 
 
 def download_model_obj_from_past_date(
-    customer_id, app_id, model_id, date, s3_model_artifact_bucket, cw_wrapper
+    customer_id, app_id, model_id, strategy_name, date, s3_model_artifact_bucket, cw_wrapper
 ) -> Predictor:
     import datetime
 
+    print(strategy_name)
     # Extracted artifact file name
-    artifact_file_name = f"{customer_id}_{app_id}_{model_id}.joblib"
+    artifact_file_name = f"{customer_id}_{app_id}_{model_id}_{strategy_name}.joblib"
 
     # Refactored variable names for clarity
     previous_date = (datetime.date.fromisoformat(date) - datetime.timedelta(days=1)).isoformat()
@@ -181,6 +173,8 @@ def copy_model_artifact(bucket, from_key, to_key):
     """
     Copies a model artifact from one key to another in the same S3 bucket
     """
+    print('debugger')
+    print(bucket, from_key, to_key)
     s3_client = boto3.client("s3")
     response = s3_client.copy_object(
         Bucket=bucket,
@@ -193,7 +187,7 @@ def copy_model_artifact(bucket, from_key, to_key):
 
 
 def publish_model_artifact(
-    region, customer_id, app_id, model_ids: [str], date, s3_model_artifact_bucket, bid_floor_version
+    region, customer_id, app_id, strategy_name, model_ids: [str], date, s3_model_artifact_bucket, bid_floor_version
 ) -> str:
     cw_wrapper = CloudWatchAlerts(region=region).cw_wrapper
     sagemaker_tar_content = {str(app_id): {}}
@@ -203,6 +197,7 @@ def publish_model_artifact(
             customer_id=customer_id,
             app_id=app_id,
             model_id=model_id,
+            strategy_name=strategy_name, 
             date=date,
             s3_model_artifact_bucket=s3_model_artifact_bucket,
             cw_wrapper=cw_wrapper,
@@ -261,6 +256,7 @@ def publish_artifacts():
         region=parsed_args_obj.region,
         customer_id=parsed_args_obj.customerId,
         app_id=parsed_args_obj.appId,
+        strategy_name=parsed_args_obj.strategyName[0],
         model_ids=parsed_args_obj.modelIds,
         date=parsed_args_obj.date,
         s3_model_artifact_bucket=parsed_args_obj.s3ModelArtifactBucket,
