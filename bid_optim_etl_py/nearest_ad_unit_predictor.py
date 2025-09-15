@@ -52,7 +52,11 @@ class NearestAdUnitPredictor(BaseModel):
     )
 
     low_multiplier: float = 0
-    high_multiplier: float = 1.5*1000
+    high_multiplier: float = 1.5
+
+    def model_post_init(self, __context):
+        # multiply by 1000 after initialisation
+        self.high_multiplier *= 1000
 
 
 
