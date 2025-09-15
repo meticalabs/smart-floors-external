@@ -72,3 +72,17 @@ class StrategyTrainingArgsParser(CommandLineParser):
         parser.add_argument("--strategyName", type=str, help="strategy name")
         parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
         return parser
+
+class NearestAdUnitPredictorArgsParser(CommandLineParser):
+    @staticmethod
+    def parser():
+        parser = argparse.ArgumentParser(description="Run the nearest ad unit predictor")
+        parser.add_argument("--region", type=str, help="AWS region name, e.g., us-east-1", required=True)
+        parser.add_argument("--customerId", type=int, help="Customer ID")
+        parser.add_argument("--appId", type=int, help="App ID")
+        parser.add_argument("--date", type=str, help="Date in YYYY-MM-DD format")
+        parser.add_argument("--modelId", type=str, help="Model ID")
+        parser.add_argument("--strategyName", type=str, help="strategy name")
+        parser.add_argument("--highMultiply", type=float, help="high multiply factor", default=1.5)
+        parser.add_argument("--s3ModelArtifactBucket", help="S3 bucket name for model artifact")
+        return parser

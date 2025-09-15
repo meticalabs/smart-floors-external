@@ -43,14 +43,19 @@ class NearestAdUnitPredictor(BaseModel):
     """
 
     model_config: ConfigDict = ConfigDict(arbitrary_types_allowed=True)
-    LOW_MULTIPLIER: float = 0
-    HIGH_MULTIPLIER: float = 1.5 * 1000 # Convert to CPM
+    
     rng_exploration: SkipValidation[np.random.Generator] = dataclasses.field(
         default_factory=lambda: np.random.default_rng()
     )
     rng_shuffle: SkipValidation[np.random.Generator] = dataclasses.field(
         default_factory=lambda: np.random.default_rng()
     )
+
+    def model_post_init(self, __context: Any, low_multiplier: float, high_multiplier: float = 1.5*1000) -> None:
+        self.LOW_MULTIPLIER: float = low_multiplier
+        self.HIGH_MULTIPLIER: float = high_multiplier
+
+
 
     def sort_by_name_postfix_desc(self, assignments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -193,10 +198,6 @@ def run():
     bid_floor_management_api = BidFloorManagementAPI(http_client=HttpClient(base_url=config_file.managementApiBaseUrl))
     etl_config = bid_floor_management_api.fetch_etl_config(cmd_line_args.appId)
     model_config = bid_floor_management_api.fetch_model_config(cmd_line_args.appId, cmd_line_args.modelId)
-
-    # model_config = bid_floor_management_api.fetch_model_config(12101, 'android_inter')
-    # etl_config = bid_floor_management_api.fetch_etl_config(12101)
-
 
     logging.info(f"ETL Config: {etl_config}")
     logging.info(f"Model Config: {model_config}")
