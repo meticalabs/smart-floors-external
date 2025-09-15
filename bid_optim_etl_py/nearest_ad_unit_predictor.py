@@ -51,9 +51,8 @@ class NearestAdUnitPredictor(BaseModel):
         default_factory=lambda: np.random.default_rng()
     )
 
-    def model_post_init(self, __context: Any, low_multiplier: float, high_multiplier: float = 1.5*1000) -> None:
-        self.LOW_MULTIPLIER: float = low_multiplier
-        self.HIGH_MULTIPLIER: float = high_multiplier
+    low_multiplier: float = 0
+    high_multiplier: float = 1.5*1000
 
 
 
@@ -149,8 +148,8 @@ class NearestAdUnitPredictor(BaseModel):
             last72_key = next(
                 (k for k in context.keys() if isinstance(k, str) and k.lower().endswith('last72hours')), None)
             last72_value = context.get(last72_key, 0) if last72_key else 0
-            target = last72_value * self.HIGH_MULTIPLIER
-            # Find the ad unit whose bidFloor * HIGH_MULTIPLIER is closest to target
+            target = last72_value * self.high_multiplier
+            # Find the ad unit whose bidFloor * high_multiplier is closest to target
             best = min(candidates, key=lambda x: abs(x["bidFloor"] - target))
             return self.form_response([best], lowest_bid_floor, 1.0)
 
@@ -198,6 +197,7 @@ def run():
     bid_floor_management_api = BidFloorManagementAPI(http_client=HttpClient(base_url=config_file.managementApiBaseUrl))
     etl_config = bid_floor_management_api.fetch_etl_config(cmd_line_args.appId)
     model_config = bid_floor_management_api.fetch_model_config(cmd_line_args.appId, cmd_line_args.modelId)
+
 
     logging.info(f"ETL Config: {etl_config}")
     logging.info(f"Model Config: {model_config}")

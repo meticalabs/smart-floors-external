@@ -76,7 +76,7 @@ def test_predict_closest_ad_unit_different_context(predictor):
         {"name": "ad_unit_4", "id": "4", "bidFloor": 2.0},
     ]
     # For max_ad_units=2, the logic will try to find the ad unit whose bidFloor
-    #  * HIGH_MULTIPLIER is closest to 1.2 * 1.5 = 1.8
+    #  * high_multiplier is closest to 1.2 * 1.5 = 1.8
     result = predictor.predict(context, floors, max_ad_units=2)
     returned_ids = set(result["cpmFloorAdUnitIds"])
     lowest = min(floors, key=lambda x: x["bidFloor"])
@@ -84,7 +84,7 @@ def test_predict_closest_ad_unit_different_context(predictor):
     assert len(returned_ids) == 1
     returned_id = returned_ids.pop()
     returned_bidfloor = next(f["bidFloor"] for f in floors if f["id"] == returned_id)
-    target = context["user.avgInterRevenueLast72Hours"] * predictor.HIGH_MULTIPLIER
+    target = context["user.avgInterRevenueLast72Hours"] * predictor.high_multiplier
     closest = min(
         [f for f in floors if f["id"] != lowest["id"]],
         key=lambda x: abs(x["bidFloor"] - target),
@@ -119,7 +119,7 @@ def test_predict_closest_ad_unit_different_context(predictor):
     # Find the bidFloor of the returned ad unit
     returned_bidfloor = next(f["bidFloor"] for f in floors if f["id"] == returned_id)
     # Compute which is closest
-    target = context["user.avgInterRevenueLast72Hours"] * predictor.HIGH_MULTIPLIER
+    target = context["user.avgInterRevenueLast72Hours"] * predictor.high_multiplier
     closest = min(
         [f for f in floors if f["id"] != lowest["id"]],
         key=lambda x: abs(x["bidFloor"] - target),

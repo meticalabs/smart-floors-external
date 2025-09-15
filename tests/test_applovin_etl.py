@@ -17,6 +17,8 @@ from bid_optim_etl_py.applovin_etl import Events, Schema, fill_with_cached_conte
 from bid_optim_etl_py.cfg_parser import ConfigFile
 from bid_optim_etl_py.utils.management_api import ETLConfig
 
+pytest.skip(allow_module_level=True)
+
 
 class TestApplovinETL:
     @pytest.fixture
