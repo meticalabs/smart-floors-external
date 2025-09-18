@@ -1,38 +1,57 @@
-# bid-optim-etl-py
+# AppLovin Bid Floor Update Tool
 
-<p>
-<a href="https://www.python.org/downloads/release/python-3100/"><img alt="python" src="https://img.shields.io/badge/python-3.10+-blue.svg"></a>
-<a href="https://github.com/meticalabs/bid-optim-etl-py/actions/workflows/wf-on-push-and-pr.yml"><img alt="Build" src="https://github.com/meticalabs/bid-optim-etl-py/actions/workflows/wf-on-push-and-pr.yml/badge.svg?branch=main"></a>
-<a href="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json"><img alt="uv" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json"></a>
-<a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
-<a href="https://github.com/astral-sh/ruff"><img alt="ruff" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json"></a>
-</p>
+This tool allows external customers to update bid floor values for their AppLovin ad units using pre-configured JSON files.
 
-## Description
-Repository to hold the implementation of the bid floor optimisation ml training and inference logic
+## Installation
 
-## Build
-```shell
-# Pre-requisite: Setup venv or conda environment before running below commands
-
-# Install dependencies
-make install
-
-# Run all tests
-make test
-
-# Tests with coverage
-make test-coverage
-
-# Build
-make build
-
-# Format 
-make format
-
-# Lint (Ruff)
-make ruff
-
-# All (Install + Test + Build)
-make all
+```bash
+pip install requests
 ```
+
+## Usage
+
+```bash
+python scripts/update_bid_floor_values.py \
+    --packageName "your.app.package" \
+    --adUnitConfigFolder "path/to/config/folder" \
+    --apiKey "your_applovin_api_key" \
+    --adType "reward" \
+    --platform "android"
+```
+
+### Parameters
+
+- `--packageName`: Your app's package name (e.g., "com.example.myapp")
+- `--adUnitConfigFolder`: Path to folder containing JSON configuration files
+- `--apiKey`: Your AppLovin Management API key
+- `--adType`: Ad type - "reward" or "inter" (default: "reward")
+- `--platform`: Platform - "android" or "ios" (default: "android")
+
+### Configuration File Format
+
+Place JSON files in the configuration folder with the following format:
+
+```json
+[
+    {
+        "ad_unit_id": "your_ad_unit_id",
+        "ad_unit_name": "your_ad_unit_name",
+        "bid_floors": [
+            {
+                "country_group_name": "tier1",
+                "cpm": "2.50",
+                "countries": {
+                    "type": "INCLUDE",
+                    "values": ["us", "ca", "gb"]
+                }
+            }
+        ]
+    }
+]
+```
+
+## Requirements
+
+- Python 3.10+
+- Valid AppLovin Management API key
+- Pre-configured bid floor JSON files provided by Metica
