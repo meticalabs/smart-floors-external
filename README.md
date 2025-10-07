@@ -1,57 +1,50 @@
-# AppLovin Bid Floor Update Tool
+## AppLovin Bid Floor Updater (Client)
 
-This tool allows external customers to update bid floor values for their AppLovin ad units using pre-configured JSON files.
+This repository provides a robust client-side tool to update AppLovin bid floors based on the latest bid floor percentiles stored in S3. It also uploads the computed ad unit configurations back to S3 for observability and audit.
 
-## Installation
+### What it does
+- Reads the latest bid floor percentiles JSON from S3.
+- Computes bid floor configurations per Metica ad unit.
+- Updates AppLovin ad units using the client-provided API key.
+- Uploads the resulting `ad_unit_configurations.json` to S3.
 
+### Requirements
+- Python 3.10–3.11
+- AppLovin Management API key
+- AWS access key/secret with read and write access to artifacts bucket
+
+### Installation
 ```bash
-pip install requests
+pip install -e .
 ```
 
-## Usage
+### Expected S3 layout
+```
+s3://com.metica.prod-eu.dplat.artifacts/
+  bid-floor-optimisation/applovin/percentile/
+    <customer_id>/<app_id>/<YYYY-MM-DD>/<platform>/<ad_type>.json
+    <customer_id>/<app_id>/uploads/ad_unit_configurations.json
+```
 
+### Usage
 ```bash
 python scripts/update_bid_floor_values.py \
-    --packageName "your.app.package" \
-    --adUnitConfigFolder "path/to/config/folder" \
-    --apiKey "your_applovin_api_key" \
-    --adType "reward" \
-    --platform "android"
+  --customer-id <METICA_CUSTOMER_ID> \
+  --app-id <METICA_APP_ID> \
+  --ad-type reward \
+  --platform android \
+  --applovin-api-key "<CLIENT_APPLOVIN_API_KEY>" \
+  --aws-access-key-id "<AWS_ACCESS_KEY_ID>" \
+  --aws-secret-access-key "<AWS_SECRET_ACCESS_KEY>" \
+  --aws-region eu-west-1 \
+  --s3-bucket com.metica.prod-eu.dplat.artifacts \
+  --package-name <APPLOVIN_PACKAGE_NAME>
 ```
 
-### Parameters
+### Exit behavior
+- Fails with a clear error if no latest percentiles JSON is found for the given `platform` and `ad_type`.
+- Logs a success message after updating AppLovin and uploading configurations.
 
-- `--packageName`: Your app's package name (e.g., "com.example.myapp")
-- `--adUnitConfigFolder`: Path to folder containing JSON configuration files
-- `--apiKey`: Your AppLovin Management API key
-- `--adType`: Ad type - "reward" or "inter" (default: "reward")
-- `--platform`: Platform - "android" or "ios" (default: "android")
-
-### Configuration File Format
-
-Place JSON files in the configuration folder with the following format:
-
-```json
-[
-    {
-        "ad_unit_id": "your_ad_unit_id",
-        "ad_unit_name": "your_ad_unit_name",
-        "bid_floors": [
-            {
-                "country_group_name": "tier1",
-                "cpm": "2.50",
-                "countries": {
-                    "type": "INCLUDE",
-                    "values": ["us", "ca", "gb"]
-                }
-            }
-        ]
-    }
-]
-```
-
-## Requirements
-
-- Python 3.10+
-- Valid AppLovin Management API key
-- Pre-configured bid floor JSON files provided by Metica
+### Development
+- Run tests: `pytest -q`
+- Lint: use your preferred linter/formatter; keep code readable and typed hints explicit where helpful.
