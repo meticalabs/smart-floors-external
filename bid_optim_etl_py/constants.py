@@ -12,3 +12,6 @@ PERCENTILE_COLUMNS = ["p10", "p20", "p30", "p40", "p50", "p60", "p70", "p80", "p
 
 # Data Processing
 CPM_MULTIPLIER = 1000  # Convert to CPM
+
+# Max CPM value
+MAX_CPM = 500

@@ -13,6 +13,7 @@ from bid_optim_etl_py.constants import (
     BID_FLOOR_PERCENTILES_PREFIX,
     PERCENTILE_COLUMNS,
     CPM_MULTIPLIER,
+    MAX_CPM,
 )
 from bid_optim_etl_py.helpers.applovin_management_api_client import ApplovinManagementApiClient
 from bid_optim_etl_py.helpers.data_helpers import (
@@ -37,6 +38,9 @@ def read_percentiles_from_s3(s3_client, bucket: str, key: str) -> pd.DataFrame:
     data = obj["Body"].read().decode("utf-8")
     percentiles_df = pd.read_json(data, orient="records")
     percentiles_df = convert_to_cpm(percentiles_df, PERCENTILE_COLUMNS, CPM_MULTIPLIER)
+    for col in PERCENTILE_COLUMNS:
+        if col in percentiles_df.columns:
+            percentiles_df.loc[percentiles_df[col] > MAX_CPM, col] = MAX_CPM -100 
     if "user.country" in percentiles_df.columns:
         percentiles_df = percentiles_df[percentiles_df["user.country"].notnull()]
         percentiles_df = percentiles_df[percentiles_df["user.country"].astype(str).str.strip() != ""]
