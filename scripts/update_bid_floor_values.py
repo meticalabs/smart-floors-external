@@ -145,9 +145,9 @@ def main():
     update_bid_floors_applovin(applovin_client, configurations, metica_ad_units)
     logger.info("AppLovin update complete")
 
-
-    upload_key = f"{BID_FLOOR_PERCENTILES_PREFIX}/{args.customer_id}/{args.app_id}/uploads/ad_unit_configurations.json"
-    body = json.dumps(configurations)
+    updated_ad_unit_configurations = get_metica_ad_units(applovin_client, args.app_id, args.ad_type, args.package_name)
+    upload_key = f"{BID_FLOOR_PERCENTILES_PREFIX}/{args.customer_id}/{args.app_id}/uploads/ad_unit_configurations_{args.platform}_{args.ad_type}.json"
+    body = json.dumps(updated_ad_unit_configurations)
     s3_client.put_object(Bucket=args.s3_bucket, Key=upload_key, Body=body, ContentType="application/json")
     logger.info(f"Uploaded configurations to s3://{args.s3_bucket}/{upload_key}")
 
