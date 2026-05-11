@@ -12,10 +12,29 @@ def extract_numeric_suffix(ad_unit_name: str) -> int:
     return int(match.group(1)) if match else 0
 
 
+def discover_percentile_columns(df: pd.DataFrame) -> List[str]:
+    """Return percentile columns (e.g. p10, p40, p83, p99) sorted by percentile value.
+
+    Any column matching ``^p\\d+$`` is treated as a percentile. This lets the client
+    consume whichever grid the upstream calculator emits (standard / aggressive /
+    ultra-aggressive / future) without code changes.
+    """
+    pcols = [c for c in df.columns if re.fullmatch(r"p\d+", str(c))]
+    if not pcols:
+        raise ValueError("No percentile columns (pNN) found in input file.")
+    return sorted(pcols, key=lambda c: int(c[1:]))
+
+
 def convert_to_cpm(df: pd.DataFrame, columns: List[str], multiplier: float = 1000.0) -> pd.DataFrame:
-    """Convert specified columns to CPM by multiplying by multiplier."""
+    """Convert specified columns to CPM by multiplying by multiplier.
+
+    Silently skips columns that are not present in the DataFrame, so callers can pass
+    a desired column list without first guarding against schema differences.
+    """
     df_copy = df.copy()
-    df_copy[columns] = df_copy[columns] * multiplier
+    cols_present = [c for c in columns if c in df_copy.columns]
+    if cols_present:
+        df_copy[cols_present] = df_copy[cols_present] * multiplier
     return df_copy
 
 

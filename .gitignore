@@ -180,3 +180,6 @@ poetry.lock
 /stdout
 /py-env.zip
 /env.yml
+
+# Local-only test fixtures (real customer data — kept out of the shared repo)
+tests/fixtures/

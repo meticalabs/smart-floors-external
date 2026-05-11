@@ -2,16 +2,16 @@ import argparse
 import json
 import logging
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import boto3
+import numpy as np
 import pandas as pd
 
 from bid_optim_etl_py.constants import (
     APPLOVIN_API_BASE_URL,
     S3_ARTIFACTS_BUCKET,
     BID_FLOOR_PERCENTILES_PREFIX,
-    PERCENTILE_COLUMNS,
     CPM_MULTIPLIER,
     MAX_CPM,
 )
@@ -22,6 +22,7 @@ from bid_optim_etl_py.helpers.data_helpers import (
     group_countries_by_cpm,
     create_bid_floor_entry,
     filter_metica_ad_units,
+    discover_percentile_columns,
 )
 
 
@@ -33,18 +34,19 @@ def build_percentiles_prefix(customer_id: int, app_id: int) -> str:
     return f"{BID_FLOOR_PERCENTILES_PREFIX}/{customer_id}/{app_id}/"
 
 
-def read_percentiles_from_s3(s3_client, bucket: str, key: str) -> pd.DataFrame:
+def read_percentiles_from_s3(s3_client, bucket: str, key: str) -> Tuple[pd.DataFrame, List[str]]:
     obj = s3_client.get_object(Bucket=bucket, Key=key)
     data = obj["Body"].read().decode("utf-8")
     percentiles_df = pd.read_json(data, orient="records")
-    percentiles_df = convert_to_cpm(percentiles_df, PERCENTILE_COLUMNS, CPM_MULTIPLIER)
-    for col in PERCENTILE_COLUMNS:
-        if col in percentiles_df.columns:
-            percentiles_df.loc[percentiles_df[col] > MAX_CPM, col] = MAX_CPM -100 
+    percentile_columns = discover_percentile_columns(percentiles_df)
+    logger.info(f"Discovered {len(percentile_columns)} percentile columns: {percentile_columns}")
+    percentiles_df = convert_to_cpm(percentiles_df, percentile_columns, CPM_MULTIPLIER)
+    for col in percentile_columns:
+        percentiles_df.loc[percentiles_df[col] > MAX_CPM, col] = MAX_CPM - 100
     if "user.country" in percentiles_df.columns:
         percentiles_df = percentiles_df[percentiles_df["user.country"].notnull()]
         percentiles_df = percentiles_df[percentiles_df["user.country"].astype(str).str.strip() != ""]
-    return percentiles_df
+    return percentiles_df, percentile_columns
 
 
 def get_metica_ad_units(client: ApplovinManagementApiClient, app_id: int, ad_type: str, package_name: str) -> List[Dict]:
@@ -54,29 +56,66 @@ def get_metica_ad_units(client: ApplovinManagementApiClient, app_id: int, ad_typ
     return metica_ad_units
 
 
-def create_bid_floor_configurations(metica_ad_units: List[Dict], percentiles_df: pd.DataFrame) -> List[Dict]:
-    price_points_by_country = create_price_points_by_country(percentiles_df, PERCENTILE_COLUMNS)
-    ad_unit_configurations = []
+def create_bid_floor_configurations(
+    metica_ad_units: List[Dict],
+    percentiles_df: pd.DataFrame,
+    percentile_columns: List[str],
+) -> List[Dict]:
+    """Map ad units to percentile columns via equal distribution.
+
+    The lowest percentile is favoured to be skipped (np.ceil) so ad units span
+    the upper end of the grid. Mirrors the internal calculator's behaviour so the
+    client produces identical bid floors when given an equivalent input file.
+    """
+    price_points_by_country = create_price_points_by_country(percentiles_df, percentile_columns)
+
+    n_ad_units = len(metica_ad_units)
+    n_percentiles = len(percentile_columns)
+
+    if n_ad_units == 0:
+        logger.warning("No metica ad units to configure.")
+        return []
+
+    if n_ad_units > n_percentiles:
+        logger.warning(
+            f"More ad units ({n_ad_units}) than percentiles ({n_percentiles}). "
+            f"Only the first {n_percentiles} ad units will be configured."
+        )
+        percentile_indices = list(range(n_percentiles))
+    else:
+        percentile_numbers = np.linspace(n_percentiles / n_ad_units, n_percentiles, n_ad_units)
+        percentile_indices = (np.ceil(percentile_numbers) - 1).astype(int).tolist()
+
+    configurations = []
     for i, ad_unit in enumerate(metica_ad_units):
-        country_cpm_pairs = []
-        for country, prices in price_points_by_country.items():
-            if i < len(prices):
-                price_point = prices[i]
-                country_cpm_pairs.append((country, price_point))
+        if i >= len(percentile_indices):
+            logger.warning(f"Skipping ad unit {ad_unit['name']} — no percentile to assign.")
+            continue
+        percentile_index = percentile_indices[i]
+        logger.info(
+            f"Ad unit {ad_unit['name']} (index {i}) -> percentile "
+            f"{percentile_columns[percentile_index]} (index {percentile_index})"
+        )
+
+        country_cpm_pairs = [
+            (country, prices[percentile_index])
+            for country, prices in price_points_by_country.items()
+            if percentile_index < len(prices)
+        ]
         cpm_to_countries = group_countries_by_cpm(country_cpm_pairs)
-        bid_floors = []
-        for cpm_str, countries in cpm_to_countries.items():
-            country_group_name = sorted(countries)[0].upper()
-            bid_floors.append(create_bid_floor_entry(country_group_name, cpm_str, countries))
+        bid_floors = [
+            create_bid_floor_entry(sorted(countries)[0].upper(), cpm_str, countries)
+            for cpm_str, countries in cpm_to_countries.items()
+        ]
         if bid_floors:
-            ad_unit_configurations.append(
+            configurations.append(
                 {
                     "ad_unit_id": ad_unit["id"],
                     "ad_unit_name": ad_unit["name"],
                     "bid_floors": bid_floors,
                 }
             )
-    return ad_unit_configurations
+    return configurations
 
 
 def update_bid_floors_applovin(client: ApplovinManagementApiClient, configurations: List[Dict], metica_ad_units: List[Dict]) -> None:
@@ -128,7 +167,7 @@ def main():
         )
     percentiles_key = latest_obj["Key"]
     logger.info(f"Reading percentiles from s3://{args.s3_bucket}/{percentiles_key}")
-    percentiles_df = read_percentiles_from_s3(s3_client, args.s3_bucket, percentiles_key)
+    percentiles_df, percentile_columns = read_percentiles_from_s3(s3_client, args.s3_bucket, percentiles_key)
 
     applovin_client = ApplovinManagementApiClient(api_key=args.applovin_api_key, base_url=APPLOVIN_API_BASE_URL)
 
@@ -137,7 +176,7 @@ def main():
     if not metica_ad_units:
         raise RuntimeError("No metica ad units found to update")
 
-    configurations = create_bid_floor_configurations(metica_ad_units, percentiles_df)
+    configurations = create_bid_floor_configurations(metica_ad_units, percentiles_df, percentile_columns)
     if not configurations:
         raise RuntimeError("No bid floor configurations were created")
 
