@@ -43,7 +43,9 @@ def read_percentiles_from_s3(s3_client, bucket: str, key: str) -> Tuple[pd.DataF
     logger.info(f"Discovered {len(percentile_columns)} percentile columns: {percentile_columns}")
     percentiles_df = convert_to_cpm(percentiles_df, percentile_columns, CPM_MULTIPLIER)
     for col in percentile_columns:
-        percentiles_df.loc[percentiles_df[col] > MAX_CPM, col] = MAX_CPM - 100
+        percentiles_df[col] = percentiles_df[col].astype(float)
+        percentiles_df.loc[percentiles_df[col] > MAX_CPM, col] = MAX_CPM - 1
+        percentiles_df.loc[percentiles_df[col] < 0.01, col] = 0.01
     if "user.country" in percentiles_df.columns:
         percentiles_df = percentiles_df[percentiles_df["user.country"].notnull()]
         percentiles_df = percentiles_df[percentiles_df["user.country"].astype(str).str.strip() != ""]

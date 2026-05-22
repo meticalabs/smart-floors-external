@@ -183,7 +183,7 @@ def test_main_more_percentiles_than_ad_units_e2e(mock_boto_sess, mock_client_cls
 
     Verifies the equal-distribution mapping: ad units land at indices
     [1, 3, 5, ..., 19] -> percentile values [0.2, 0.4, ..., 2.0] -> CPMs [200, 400, ..., 2000].
-    The cap at MAX_CPM-100 (=400) means CPMs >=400 all become "400.00".
+    The cap at MAX_CPM-1 (=499) means CPMs >500 all become "499.00".
     """
     from scripts.update_bid_floor_values import main
 
@@ -204,9 +204,39 @@ def test_main_more_percentiles_than_ad_units_e2e(mock_boto_sess, mock_client_cls
         au_id: bf_list[0]["cpm"] for au_id, bf_list in floors.items()
     }
     expected_pre_cap = [200.0, 400.0, 600.0, 800.0, 1000.0, 1200.0, 1400.0, 1600.0, 1800.0, 2000.0]
-    expected_capped = [v if v <= 500 else 400.0 for v in expected_pre_cap]
+    expected_capped = [v if v <= 500 else 499.0 for v in expected_pre_cap]
     for i, value in enumerate(expected_capped):
         assert cpms_per_unit[f"au{i + 2}"] == f"{value:.2f}"
+
+
+@patch("scripts.update_bid_floor_values.ApplovinManagementApiClient")
+@patch("scripts.update_bid_floor_values.boto3.Session")
+def test_main_clips_low_percentiles_to_floor_so_cpm_never_formats_as_zero(mock_boto_sess, mock_client_cls):
+    """AppLovin rejects bid floors where cpm <= 0 after formatting. CPMs format
+    via f"{cpm:.2f}", so any raw value < 0.005 renders as "0.00" — including
+    plain positives like 0.0005. Lower-clipping to 0.01 covers this whole range
+    in one shot (zeros, negatives, and small positives that would round down).
+    """
+    from scripts.update_bid_floor_values import main
+
+    pcols = STANDARD_GRID
+    mock_s3_client = _build_s3_mock(
+        _percentiles_json(
+            {"us": [0.0, -0.001, 0.00001, 0.0001, 0.001, 0.01, 0.02, 0.03, 0.04]},
+            pcols,
+        )
+    )
+    mock_boto_sess.return_value.client.return_value = mock_s3_client
+    mock_client_cls.return_value = _build_applovin_mock(ad_unit_count=2)
+
+    with patch("sys.argv", _argv()):
+        main()
+
+    floors = _bid_floors_from_calls(mock_client_cls.return_value)
+    for au_id, bid_floors in floors.items():
+        for bf in bid_floors:
+            assert float(bf["cpm"]) >= 0.01, f"{au_id}: cpm={bf['cpm']} below 0.01 floor"
+            assert bf["cpm"] != "0.00", f"{au_id}: cpm formatted as 0.00 — AppLovin rejects"
 
 
 @patch("scripts.update_bid_floor_values.ApplovinManagementApiClient")
