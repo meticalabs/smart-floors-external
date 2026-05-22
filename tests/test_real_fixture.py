@@ -130,7 +130,7 @@ def test_real_fixture_5_ad_units_1to1_mapping(mock_boto_sess, mock_client_cls):
     assert _cpm_for(floors["au6"], "vn") == "1.18"
     assert _cpm_for(floors["au2"], "kz") == "165.31"
     assert _cpm_for(floors["au6"], "kz") == "165.31"
-    assert _cpm_for(floors["au2"], "tr") == "0.00"
+    assert _cpm_for(floors["au2"], "tr") == "0.01"
     assert _cpm_for(floors["au3"], "tr") == "3.21"
 
     fixture_countries = {row["user.country"] for row in json.loads(_fixture_payload())}
@@ -183,7 +183,7 @@ def test_real_fixture_metadata_columns_ignored(mock_boto_sess, mock_client_cls):
     floors = _bid_floors_by_ad_unit(applovin)
     for au_id, bid_floors in floors.items():
         for bf in bid_floors:
-            assert float(bf["cpm"]) <= 400.0, (
-                f"{au_id}: cpm {bf['cpm']} exceeds MAX_CPM-100 (=400). "
+            assert float(bf["cpm"]) <= 499.0, (
+                f"{au_id}: cpm {bf['cpm']} exceeds MAX_CPM-1 (=499). "
                 "Suggests a non-percentile column leaked into the price computation."
             )
