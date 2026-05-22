@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 from datetime import datetime
+from io import StringIO
 from typing import List, Dict, Tuple
 
 import boto3
@@ -37,7 +38,7 @@ def build_percentiles_prefix(customer_id: int, app_id: int) -> str:
 def read_percentiles_from_s3(s3_client, bucket: str, key: str) -> Tuple[pd.DataFrame, List[str]]:
     obj = s3_client.get_object(Bucket=bucket, Key=key)
     data = obj["Body"].read().decode("utf-8")
-    percentiles_df = pd.read_json(data, orient="records")
+    percentiles_df = pd.read_json(StringIO(data), orient="records")
     percentile_columns = discover_percentile_columns(percentiles_df)
     logger.info(f"Discovered {len(percentile_columns)} percentile columns: {percentile_columns}")
     percentiles_df = convert_to_cpm(percentiles_df, percentile_columns, CPM_MULTIPLIER)
@@ -158,6 +159,8 @@ def main():
     for page in page_iterator:
         for obj in page.get("Contents", []):
             key = obj.get("Key", "")
+            if "/uploads/" in key:
+                continue
             if key.endswith(f"{args.platform}_{args.ad_type}.json"):
                 if latest_obj is None or obj["LastModified"] > latest_obj["LastModified"]:
                     latest_obj = obj
