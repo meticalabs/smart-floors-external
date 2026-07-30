@@ -51,7 +51,13 @@ def _build_applovin_mock(ad_unit_count, prefix="metica_android_reward"):
     """Create AppLovin client mock returning ``ad_unit_count`` metica ad units."""
     client_instance = MagicMock()
     units = [
-        {"id": f"au{i}", "name": f"{prefix}_{i}", "ad_format": "reward", "package_name": "com.app"}
+        {
+            "id": f"au{i}",
+            "name": f"{prefix}_{i}",
+            "ad_format": "reward",
+            "package_name": "com.app",
+            "platform": "android",
+        }
         for i in range(1, ad_unit_count + 2)
     ]
     client_instance.get_ad_units.return_value = units
@@ -291,7 +297,13 @@ def test_main_no_metica_ad_units_raises(mock_boto_sess, mock_client_cls):
     mock_boto_sess.return_value.client.return_value = mock_s3_client
     client_instance = MagicMock()
     client_instance.get_ad_units.return_value = [
-        {"id": "x", "name": "house_android_reward_2", "ad_format": "reward", "package_name": "com.app"},
+        {
+            "id": "x",
+            "name": "house_android_reward_2",
+            "ad_format": "reward",
+            "package_name": "com.app",
+            "platform": "android",
+        },
     ]
     mock_client_cls.return_value = client_instance
 

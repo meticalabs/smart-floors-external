@@ -52,10 +52,13 @@ def read_percentiles_from_s3(s3_client, bucket: str, key: str) -> Tuple[pd.DataF
     return percentiles_df, percentile_columns
 
 
-def get_metica_ad_units(client: ApplovinManagementApiClient, app_id: int, ad_type: str, package_name: str) -> List[Dict]:
+def get_metica_ad_units(
+    client: ApplovinManagementApiClient, app_id: int, ad_type: str, package_name: str, platform: str
+) -> List[Dict]:
     fields = ["ad_network_settings", "frequency_capping_settings", "bid_floors"]
     ad_units = client.get_ad_units(fields=fields)
-    metica_ad_units = filter_metica_ad_units(ad_units, package_name, ad_type)
+    metica_ad_units = filter_metica_ad_units(ad_units, package_name, ad_type, platform=platform)
+    logger.info(f"Found {len(metica_ad_units)} metica {platform} {ad_type} ad units for package {package_name}")
     return metica_ad_units
 
 
@@ -177,7 +180,9 @@ def main():
     applovin_client = ApplovinManagementApiClient(api_key=args.applovin_api_key, base_url=APPLOVIN_API_BASE_URL)
 
 
-    metica_ad_units = get_metica_ad_units(applovin_client, args.app_id, args.ad_type, args.package_name)
+    metica_ad_units = get_metica_ad_units(
+        applovin_client, args.app_id, args.ad_type, args.package_name, args.platform
+    )
     if not metica_ad_units:
         raise RuntimeError("No metica ad units found to update")
 
@@ -189,7 +194,9 @@ def main():
     update_bid_floors_applovin(applovin_client, configurations, metica_ad_units)
     logger.info("AppLovin update complete")
 
-    updated_ad_unit_configurations = get_metica_ad_units(applovin_client, args.app_id, args.ad_type, args.package_name)
+    updated_ad_unit_configurations = get_metica_ad_units(
+        applovin_client, args.app_id, args.ad_type, args.package_name, args.platform
+    )
     upload_key = f"{BID_FLOOR_PERCENTILES_PREFIX}/{args.customer_id}/{args.app_id}/uploads/ad_unit_configurations_{args.platform}_{args.ad_type}.json"
     body = json.dumps(updated_ad_unit_configurations)
     s3_client.put_object(Bucket=args.s3_bucket, Key=upload_key, Body=body, ContentType="application/json")

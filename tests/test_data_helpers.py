@@ -123,51 +123,90 @@ def test_create_bid_floor_entry_lowercases_country_codes():
     assert entry["countries"]["values"] == ["gb", "us"]
 
 
+def _unit(uid, name, ad_format="reward", package_name="com.app", platform="android"):
+    return {
+        "id": uid,
+        "name": name,
+        "ad_format": ad_format,
+        "package_name": package_name,
+        "platform": platform,
+    }
+
+
 def test_filter_metica_ad_units_excludes_underscore_1():
     units = [
-        {"id": "a", "name": "metica_android_reward_1", "ad_format": "reward", "package_name": "com.app"},
-        {"id": "b", "name": "metica_android_reward_2", "ad_format": "reward", "package_name": "com.app"},
-        {"id": "c", "name": "metica_android_reward_3", "ad_format": "reward", "package_name": "com.app"},
+        _unit("a", "metica_android_reward_1"),
+        _unit("b", "metica_android_reward_2"),
+        _unit("c", "metica_android_reward_3"),
     ]
-    out = filter_metica_ad_units(units, "com.app", "reward")
+    out = filter_metica_ad_units(units, "com.app", "reward", platform="android")
     assert [u["id"] for u in out] == ["b", "c"]
 
 
 def test_filter_metica_ad_units_filters_by_package():
     units = [
-        {"id": "a", "name": "metica_android_reward_2", "ad_format": "reward", "package_name": "com.app"},
-        {"id": "b", "name": "metica_android_reward_3", "ad_format": "reward", "package_name": "com.other"},
+        _unit("a", "metica_android_reward_2"),
+        _unit("b", "metica_android_reward_3", package_name="com.other"),
     ]
-    out = filter_metica_ad_units(units, "com.app", "reward")
+    out = filter_metica_ad_units(units, "com.app", "reward", platform="android")
     assert [u["id"] for u in out] == ["a"]
 
 
 def test_filter_metica_ad_units_filters_by_ad_format():
     units = [
-        {"id": "a", "name": "metica_android_reward_2", "ad_format": "reward", "package_name": "com.app"},
-        {"id": "b", "name": "metica_android_inter_2", "ad_format": "inter", "package_name": "com.app"},
+        _unit("a", "metica_android_reward_2"),
+        _unit("b", "metica_android_inter_2", ad_format="inter"),
     ]
-    out = filter_metica_ad_units(units, "com.app", "reward")
+    out = filter_metica_ad_units(units, "com.app", "reward", platform="android")
     assert [u["id"] for u in out] == ["a"]
 
 
 def test_filter_metica_ad_units_excludes_non_metica_names():
     units = [
-        {"id": "a", "name": "metica_android_reward_2", "ad_format": "reward", "package_name": "com.app"},
-        {"id": "b", "name": "house_android_reward_2", "ad_format": "reward", "package_name": "com.app"},
+        _unit("a", "metica_android_reward_2"),
+        _unit("b", "house_android_reward_2"),
     ]
-    out = filter_metica_ad_units(units, "com.app", "reward")
+    out = filter_metica_ad_units(units, "com.app", "reward", platform="android")
     assert [u["id"] for u in out] == ["a"]
 
 
 def test_filter_metica_ad_units_sorts_by_numeric_suffix():
     units = [
-        {"id": "ten", "name": "metica_android_reward_10", "ad_format": "reward", "package_name": "com.app"},
-        {"id": "two", "name": "metica_android_reward_2", "ad_format": "reward", "package_name": "com.app"},
-        {"id": "five", "name": "metica_android_reward_5", "ad_format": "reward", "package_name": "com.app"},
+        _unit("ten", "metica_android_reward_10"),
+        _unit("two", "metica_android_reward_2"),
+        _unit("five", "metica_android_reward_5"),
     ]
-    out = filter_metica_ad_units(units, "com.app", "reward")
+    out = filter_metica_ad_units(units, "com.app", "reward", platform="android")
     assert [u["id"] for u in out] == ["two", "five", "ten"]
+
+
+def test_filter_metica_ad_units_filters_by_platform_when_package_is_shared():
+    """One package_name covers both platforms, so platform must do the separating.
+
+    Regression test for the bug where the omitted platform filter returned android and
+    iOS units interleaved by numeric suffix, overflowing the percentile grid and silently
+    dropping the highest-numbered ad units.
+    """
+    units = [
+        _unit("a2", "metica_android_rewarded_ad_unit_2", platform="android"),
+        _unit("i2", "metica_ios_rewarded_ad_unit_2", platform="ios"),
+        _unit("a3", "metica_android_rewarded_ad_unit_3", platform="android"),
+        _unit("i3", "metica_ios_rewarded_ad_unit_3", platform="ios"),
+    ]
+
+    assert [u["id"] for u in filter_metica_ad_units(units, "com.app", "reward", platform="android")] == ["a2", "a3"]
+    assert [u["id"] for u in filter_metica_ad_units(units, "com.app", "reward", platform="ios")] == ["i2", "i3"]
+
+
+def test_filter_metica_ad_units_platform_match_is_case_insensitive():
+    units = [_unit("a", "metica_android_reward_2", platform="Android")]
+    assert [u["id"] for u in filter_metica_ad_units(units, "com.app", "reward", platform="android")] == ["a"]
+
+
+def test_filter_metica_ad_units_requires_platform():
+    units = [_unit("a", "metica_android_reward_2")]
+    with pytest.raises(TypeError):
+        filter_metica_ad_units(units, "com.app", "reward")
 
 
 def test_extract_numeric_suffix_returns_int():

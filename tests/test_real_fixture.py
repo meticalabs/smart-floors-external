@@ -51,7 +51,13 @@ def _build_s3_mock():
 def _build_applovin_mock(ad_unit_count):
     instance = MagicMock()
     instance.get_ad_units.return_value = [
-        {"id": f"au{i}", "name": f"metica_android_reward_{i}", "ad_format": "reward", "package_name": "com.app"}
+        {
+            "id": f"au{i}",
+            "name": f"metica_android_reward_{i}",
+            "ad_format": "reward",
+            "package_name": "com.app",
+            "platform": "android",
+        }
         for i in range(1, ad_unit_count + 2)
     ]
     return instance
