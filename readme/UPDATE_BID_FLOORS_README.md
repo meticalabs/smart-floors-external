@@ -50,9 +50,9 @@ option.** Whichever `pNN` columns appear in the file are used as-is.
 ### Ad-unit ↔ percentile mapping
 
 The script fetches all Metica ad units from AppLovin for the given
-package/ad-format, excludes the `..._1` control unit, sorts the remainder by the
-numeric suffix in the name, and assigns each one a percentile column via equal
-distribution (`numpy.linspace` + `numpy.ceil`):
+package/platform/ad-format, excludes the `..._1` control unit, sorts the
+remainder by the numeric suffix in the name, and assigns each one a percentile
+column via equal distribution (`numpy.linspace` + `numpy.ceil`):
 
 - **Equal count** (`N` ad units, `N` percentiles) — ad unit *i* gets percentile
   column *i*.
@@ -63,6 +63,11 @@ distribution (`numpy.linspace` + `numpy.ceil`):
   — only the first `M` ad units receive bid-floor updates; the remainder are
   logged as skipped.
 - **Zero ad units** — no updates are made.
+
+`--platform` scopes both the percentile file that is read *and* the ad units that
+are written. A single `package_name` normally covers android and iOS, so the
+platform is what separates them — run the script once per platform/ad-format pair
+you want priced.
 
 ### Usage
 ```bash

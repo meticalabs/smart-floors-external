@@ -85,8 +85,23 @@ def create_bid_floor_entry(country_group_name: str, cpm: str, countries: List[st
     }
 
 
-def filter_metica_ad_units(ad_units: List[Dict], app_id: str, ad_type: str, exclude_suffix: str = "_1") -> List[Dict]:
-    """Filter metica ad units for specific app and ad type, excluding specified suffix."""
+def filter_metica_ad_units(
+    ad_units: List[Dict],
+    app_id: str,
+    ad_type: str,
+    *,
+    platform: str,
+    exclude_suffix: str = "_1",
+) -> List[Dict]:
+    """Filter metica ad units for a specific app, platform and ad type, excluding ``exclude_suffix``.
+
+    ``platform`` is keyword-only and required on purpose. A single package_name normally
+    covers both android and iOS ad units, so omitting the platform filter silently returns
+    both platforms' units. The caller then has roughly twice as many ad units as the
+    percentile file has price points, which pushes ``create_bid_floor_configurations`` into
+    its "more ad units than percentiles" branch and silently drops the highest-numbered
+    units. Requiring the argument turns that mistake into a TypeError at the call site.
+    """
     app_ad_units = [unit for unit in ad_units if unit.get("package_name") == app_id]
 
     metica_ad_units = [
@@ -94,6 +109,7 @@ def filter_metica_ad_units(ad_units: List[Dict], app_id: str, ad_type: str, excl
         for unit in app_ad_units
         if "metica" in unit.get("name", "").lower()
         and unit.get("ad_format", "").lower() == ad_type.lower()
+        and unit.get("platform", "").lower() == platform.lower()
         and not unit["name"].endswith(exclude_suffix)
     ]
 
